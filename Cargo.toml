@@ -1,0 +1,13 @@
+[package]
+name = "diffmig"
+version = "0.1.0"
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+clap = "2.33.3"
+env_logger = "0.8.3"
+indicatif = "0.16.0"
+log = "0.4.14"
+serde_json = "1.0.59"
+zip = "0.5.12"
