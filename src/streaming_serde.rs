@@ -27,7 +27,7 @@ pub fn read_array_to_iter<'a>(reader: impl Read + 'a) -> impl Iterator<Item=Valu
         match line.expect("Failed reading line from file").as_str() {
             "[" => Some(None),
             "]" => None,
-            "}," | "}" => {
+            "    }" | "    }," => {
                 partial.push("}".to_string());
                 let value = from_str::<Value>(&partial.join("\n"))
                     .expect("Failed parsing JSON array entry");
