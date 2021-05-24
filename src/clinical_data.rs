@@ -2,7 +2,7 @@ use std::error::Error;
 use serde_json::Value;
 use std::mem::discriminant;
 use crate::diff::{Diff, eq_diff, variant_diff};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct CDEFileValue<'a> {
@@ -18,7 +18,7 @@ pub enum CDEValue<'a> {
     String(&'a str),
     Number(f64),
     EmptyRange,
-    Range(Vec<&'a str>),
+    Range(HashSet<&'a str>),
     File(CDEFileValue<'a>),
 }
 
@@ -421,7 +421,7 @@ impl<'a> ClinicalDatum<'a> {
             Value::Array(a) => {
                 let range = a.iter().map(|s| {
                     Ok(s.as_str().ok_or("Invalid range cde value")?)
-                }).collect::<Result<Vec<&str>, Box<dyn Error>>>()?;
+                }).collect::<Result<HashSet<&str>, Box<dyn Error>>>()?;
 
                 match range.is_empty() {
                     true => Some(CDEValue::EmptyRange),
