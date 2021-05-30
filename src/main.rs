@@ -15,6 +15,7 @@ use zip::read::ZipFile;
 
 use crate::clinical_data::{PatientSlice};
 use crate::streaming::{read_array_file_to_values, map_values_to_clinical_data, RegistryData};
+use itertools::{Itertools, EitherOrBoth};
 
 fn get_zip_archive<'a>(zip_path: &'a str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
@@ -51,19 +52,29 @@ fn prompt_input() -> PromptResponse {
 fn zip_diff<'a>(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
     let mut skip_input = false;
 
-    let counts = old_iter.zip(new_iter).map(|(old, new)| {
-        match old.print_diffs(&new) {
-            None => None,
-            Some(diffs) => {
-                if !skip_input {
-                    match prompt_input() {
-                        PromptResponse::All => skip_input = true,
-                        PromptResponse::Yes => {}
-                        PromptResponse::No => process::exit(0)
+    let counts = old_iter.zip_longest(new_iter).map(|pair| {
+        match pair {
+            EitherOrBoth::Both(old, new) => {
+                match old.print_diffs(&new) {
+                    None => None,
+                    Some(diffs) => {
+                        if !skip_input {
+                            match prompt_input() {
+                                PromptResponse::All => skip_input = true,
+                                PromptResponse::Yes => {}
+                                PromptResponse::No => process::exit(0)
+                            }
+                        }
+
+                        Some(diffs)
                     }
                 }
-
-                Some(diffs)
+            }
+            EitherOrBoth::Left(old) => {
+                panic!("New ran out of slices!")
+            }
+            EitherOrBoth::Right(new) => {
+                panic!("Old ran out of slices!")
             }
         }
     }).collect::<Vec<Option<usize>>>();
