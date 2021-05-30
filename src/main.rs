@@ -1,11 +1,10 @@
 mod clinical_data;
 mod diff;
-mod streaming_serde;
+mod streaming;
 
 use clap::{App, Arg};
 use env_logger;
 use indicatif::{ProgressBar, ProgressStyle, ProgressFinish};
-use serde_json::Value;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, stdin, stdout, Write};
@@ -14,9 +13,8 @@ use std::process;
 use zip::ZipArchive;
 use zip::read::ZipFile;
 
-use crate::clinical_data::{ClinicalDatum};
-use crate::diff::Diff;
-use crate::streaming_serde::read_array_to_iter;
+use crate::clinical_data::{PatientSlice};
+use crate::streaming::{read_array_file_to_values, map_values_to_clinical_data, RegistryData};
 
 fn get_zip_archive<'a>(zip_path: &'a str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
@@ -51,53 +49,35 @@ fn prompt_input() -> PromptResponse {
     }
 }
 
-fn zip_diff(old_iter: impl Iterator<Item=Value>, new_iter: impl Iterator<Item=Value>) -> Result<usize, Box<dyn Error>> {
+fn zip_diff<'a>(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
     let mut skip_input = false;
 
-    let counts = old_iter.zip(new_iter).map(|(v1, v2)| {
-        let old_data = ClinicalDatum::from(&v1)?;
-        let new_data = ClinicalDatum::from(&v2)?;
-
-        match (old_data, new_data) {
-            (Some(old), Some(new)) => {
-                match old.diff(&new) {
-                    None => Ok(None),
-                    Some(diffs) => {
-                        diffs.iter().for_each(|d| {
-                            eprintln!("{:#?}", d);
-                        });
-
-                        if !skip_input {
-                            match prompt_input() {
-                                PromptResponse::All => skip_input = true,
-                                PromptResponse::Yes => {}
-                                PromptResponse::No => process::exit(0)
-                            }
-                        }
-
-                        Ok(Some(diffs.len()))
+    let counts = old_iter.zip(new_iter).map(|(old, new)| {
+        match old.print_diffs(&new) {
+            None => None,
+            Some(diffs) => {
+                if !skip_input {
+                    match prompt_input() {
+                        PromptResponse::All => skip_input = true,
+                        PromptResponse::Yes => {}
+                        PromptResponse::No => process::exit(0)
                     }
                 }
-            }
-            (None, None) => Ok(None),
-            (None, Some(_)) => {
-                Err("Old entry skipped but new entry wasn't".into())
-            }
-            (Some(_), None) => {
-                Err("New entry skipped but old entry wasn't".into())
+
+                Some(diffs)
             }
         }
-    }).collect::<Result<Vec<Option<usize>>, Box<dyn Error>>>()?;
+    }).collect::<Vec<Option<usize>>>();
 
-    Ok(counts.into_iter().filter_map(|v| v).sum())
+    counts.into_iter().filter_map(|v| v).sum()
 }
 
-fn diff_clinical_data(old_path: &str, new_path: &str, registry_code: &str) -> Result<usize, Box<dyn Error>> {
-    let mut old_archive = get_zip_archive(old_path)?;
-    let mut new_archive = get_zip_archive(new_path)?;
+fn diff_clinical_data(old_path: String, new_path: String, registry_code: String) -> Result<usize, Box<dyn Error>> {
+    let mut old_archive = get_zip_archive(old_path.as_str())?;
+    let mut new_archive = get_zip_archive(new_path.as_str())?;
 
-    let old_reader = get_zip_reader(&mut old_archive, registry_code)?;
-    let new_reader = get_zip_reader(&mut new_archive, registry_code)?;
+    let old_reader = get_zip_reader(&mut old_archive, registry_code.as_str())?;
+    let new_reader = get_zip_reader(&mut new_archive, registry_code.as_str())?;
 
     let pb = ProgressBar::new(old_reader.size());
     let old_reader = pb.wrap_read(old_reader);
@@ -107,10 +87,16 @@ fn diff_clinical_data(old_path: &str, new_path: &str, registry_code: &str) -> Re
         .on_finish(ProgressFinish::AtCurrentPos)
     );
 
-    let old_iter = read_array_to_iter(old_reader);
-    let new_iter = read_array_to_iter(new_reader);
+    let old_iter = read_array_file_to_values(old_reader);
+    let new_iter = read_array_file_to_values(new_reader);
 
-    Ok(zip_diff(old_iter, new_iter)?)
+    let old_iter = map_values_to_clinical_data(old_iter);
+    let new_iter = map_values_to_clinical_data(new_iter);
+
+    let old_iter = RegistryData::from(Box::new(old_iter));
+    let new_iter = RegistryData::from(Box::new(new_iter));
+
+    Ok(zip_diff(old_iter, new_iter))
 }
 
 
@@ -138,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let old_zip = args.value_of("old_zip").unwrap();
     let new_zip = args.value_of("new_zip").unwrap();
 
-    let total = diff_clinical_data(old_zip, new_zip, registry_code)?;
+    let total = diff_clinical_data(old_zip.into(), new_zip.into(), registry_code.into())?;
     println!("Found {} differences", total);
 
     Ok(())

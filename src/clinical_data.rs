@@ -2,7 +2,7 @@ use std::error::Error;
 use serde_json::Value;
 use std::mem::discriminant;
 use crate::diff::{Diff, eq_diff, variant_diff};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
 
 #[derive(Debug)]
 pub struct CDEFileValue<'a> {
@@ -234,22 +234,23 @@ pub enum ClinicalDatumVariant { History, CDEs }
 
 #[derive(Debug)]
 pub struct ClinicalDatum<'a> {
-    id: u32,
+    pub id: u32,
+    pub patient: u32,
     variant: ClinicalDatumVariant,
     forms: HashMap<&'a str, Form<'a>>,
 }
 
 #[derive(Debug)]
 pub enum ClinicalDatumDifferenceType<'a> {
-    Id(u32, u32),
+    Patient(u32, u32),
     Variant(&'a ClinicalDatumVariant, &'a ClinicalDatumVariant),
     Forms(Vec<FormDifference<'a>>),
 }
 
 #[derive(Debug)]
 pub struct ClinicalDatumDifference<'a> {
-    id: u32,
-    diff: ClinicalDatumDifferenceType<'a>
+    proto_context: BTreeSet<String>,
+    diff: ClinicalDatumDifferenceType<'a>,
 }
 
 impl<'a> Diff<'a> for ClinicalDatum<'a> {
@@ -258,7 +259,7 @@ impl<'a> Diff<'a> for ClinicalDatum<'a> {
     fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
         let mut diffs = vec![];
 
-        eq_diff!(self.id, comp.id, diffs, ClinicalDatumDifferenceType::Id);
+        eq_diff!(self.patient, comp.patient, diffs, ClinicalDatumDifferenceType::Patient);
         variant_diff!(&self.variant, &comp.variant, diffs, ClinicalDatumDifferenceType::Variant);
 
         let mut form_diffs = vec![];
@@ -289,7 +290,7 @@ impl<'a> Diff<'a> for ClinicalDatum<'a> {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { id: self.id, diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { proto_context: self.forms.keys().map(|k| String::from(*k)).collect(), diff: d }).collect())
         }
     }
 }
@@ -306,6 +307,9 @@ impl<'a> ClinicalDatum<'a> {
         let id = map.get("pk")
             .ok_or("Missing PK")?
             .as_i64().ok_or("Invalid PK")? as u32;
+        let patient = fields.get("django_id")
+            .ok_or("Missing patient")?
+            .as_i64().ok_or("Invalid patient")? as u32;
         let variant = fields.get("collection")
             .ok_or("Missing collection")?
             .as_str().ok_or("Invalid collection")?;
@@ -326,7 +330,11 @@ impl<'a> ClinicalDatum<'a> {
             .as_array().ok_or("Invalid forms")?
         )?;
 
-        Ok(Some(ClinicalDatum { id, variant, forms }))
+        Ok(Some(ClinicalDatum { id, patient, variant, forms }))
+    }
+
+    pub fn proto_context(&self) -> BTreeSet<String> {
+        self.forms.keys().map(|k| String::from(*k)).collect()
     }
 
     fn get_forms(forms: &Vec<serde_json::Value>) -> Result<HashMap<&str, Form>, Box<dyn Error>> {
@@ -431,5 +439,92 @@ impl<'a> ClinicalDatum<'a> {
         };
 
         Ok(cde_value)
+    }
+}
+
+#[derive(Debug)]
+pub struct ClinicalDatumWrapper {
+    value: Value,
+}
+
+impl ClinicalDatumWrapper {
+    pub fn from(value: Value) -> ClinicalDatumWrapper {
+        ClinicalDatumWrapper { value }
+    }
+
+    pub fn clinical_datum(&self) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
+        ClinicalDatum::from(&self.value )
+    }
+
+    pub fn cd(&self) -> ClinicalDatum {
+        self.clinical_datum().unwrap().unwrap()
+    }
+}
+
+#[derive(Debug)]
+pub struct PatientSlice {
+    patient: u32,
+    clinical_data: HashMap<BTreeSet<String>, ClinicalDatumWrapper>,
+}
+
+impl<'a> PatientSlice {
+    pub fn from(patient: u32) -> PatientSlice {
+        PatientSlice { patient, clinical_data: HashMap::new() }
+    }
+
+    pub fn can_add(&mut self, datum: &ClinicalDatum) -> bool {
+        let proto_context = datum.proto_context();
+        !self.clinical_data.contains_key(&proto_context) && datum.patient == self.patient
+    }
+
+    pub fn add(&mut self, wrapper: ClinicalDatumWrapper) {
+        let proto_context = wrapper.clinical_datum().unwrap().unwrap().proto_context();
+        self.clinical_data.insert(proto_context, wrapper);
+    }
+}
+
+impl PatientSlice {
+    pub fn print_diffs(&self, comp: &Self) -> Option<usize> {
+        let mut diffs = 0;
+
+        if self.patient != comp.patient {
+            eprintln!("Patient {} doesn't match {}", self.patient, comp.patient);
+            diffs += 1;
+        }
+
+        self.clinical_data.iter().for_each(|(k, v1)| {
+            match comp.clinical_data.get(k) {
+                None => {
+                    eprintln!("RHS Missing proto-context: {:#?}", k);
+                    diffs += 1;
+                },
+                Some(v2) => match v1.cd().diff(&v2.cd()) {
+                    None => {}
+                    Some(d) => {
+                        eprintln!("({}) ({}):", v1.cd().id, v2.cd().id);
+                        eprintln!("{:#?}", d);
+                        diffs += 1;
+                    }
+                }
+            }
+        });
+
+        comp.clinical_data.iter().for_each(|(k, _)| {
+            match self.clinical_data.get(k) {
+                None => {
+                    eprintln!("LHS Missing proto-context: {:#?}", k);
+                    diffs += 1;
+                },
+                Some(_) => {}
+            }
+        });
+
+        match diffs == 0 {
+            true => None,
+            false => {
+                eprintln!();
+                Some(diffs)
+            }
+        }
     }
 }
