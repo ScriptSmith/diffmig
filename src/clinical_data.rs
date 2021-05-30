@@ -106,7 +106,7 @@ pub enum SectionDifferenceType<'a> {
 #[derive(Debug)]
 pub struct SectionDifference<'a> {
     code: &'a str,
-    diff: SectionDifferenceType<'a>
+    diff: SectionDifferenceType<'a>,
 }
 
 impl<'a> Diff<'a> for Section<'a> {
@@ -186,7 +186,7 @@ pub enum FormDifferenceType<'a> {
 #[derive(Debug)]
 pub struct FormDifference<'a> {
     name: &'a str,
-    diff: FormDifferenceType<'a>
+    diff: FormDifferenceType<'a>,
 }
 
 impl<'a> Diff<'a> for Form<'a> {
@@ -200,7 +200,7 @@ impl<'a> Diff<'a> for Form<'a> {
         let mut section_diffs = vec![];
         self.sections.iter().for_each(|(k, v1)| {
             match comp.sections.get(k) {
-                None => section_diffs.push(SectionDifference {code: k, diff: SectionDifferenceType::Missing(Some(v1), None)}),
+                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(Some(v1), None) }),
                 Some(v2) => {
                     match v1.diff(v2) {
                         None => {}
@@ -212,7 +212,7 @@ impl<'a> Diff<'a> for Form<'a> {
 
         comp.sections.iter().for_each(|(k, v)| {
             match self.sections.get(k) {
-                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(None, Some(v))}),
+                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(None, Some(v)) }),
                 Some(_) => {}
             }
         });
@@ -266,7 +266,7 @@ impl<'a> Diff<'a> for ClinicalDatum<'a> {
 
         self.forms.iter().for_each(|(k, v1)| {
             match comp.forms.get(k) {
-                None => form_diffs.push(FormDifference{ name: k, diff: FormDifferenceType::Missing(Some(v1), None)}),
+                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(Some(v1), None) }),
                 Some(v2) => {
                     match v1.diff(v2) {
                         None => {}
@@ -278,7 +278,7 @@ impl<'a> Diff<'a> for ClinicalDatum<'a> {
 
         comp.forms.iter().for_each(|(k, v)| {
             match self.forms.get(k) {
-                None => form_diffs.push(FormDifference{ name: k, diff: FormDifferenceType::Missing(None, Some(v))}),
+                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(None, Some(v)) }),
                 Some(_) => {}
             }
         });
@@ -453,7 +453,7 @@ impl ClinicalDatumWrapper {
     }
 
     pub fn clinical_datum(&self) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
-        ClinicalDatum::from(&self.value )
+        ClinicalDatum::from(&self.value)
     }
 
     pub fn cd(&self) -> ClinicalDatum {
@@ -497,7 +497,7 @@ impl PatientSlice {
                 None => {
                     eprintln!("RHS Missing proto-context: {:#?}", k);
                     diffs += 1;
-                },
+                }
                 Some(v2) => match v1.cd().diff(&v2.cd()) {
                     None => {}
                     Some(d) => {
@@ -514,7 +514,7 @@ impl PatientSlice {
                 None => {
                     eprintln!("LHS Missing proto-context: {:#?}", k);
                     diffs += 1;
-                },
+                }
                 Some(_) => {}
             }
         });

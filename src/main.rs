@@ -29,7 +29,7 @@ fn get_zip_reader<'a>(archive: &'a mut ZipArchive<impl Read + Seek>, registry_co
 enum PromptResponse {
     All,
     Yes,
-    No
+    No,
 }
 
 fn prompt_input() -> PromptResponse {
@@ -45,7 +45,6 @@ fn prompt_input() -> PromptResponse {
             "a" | "all" => return PromptResponse::All,
             _ => input.clear()
         }
-
     }
 }
 
@@ -100,7 +99,7 @@ fn diff_clinical_data(old_path: String, new_path: String, registry_code: String)
 }
 
 
-fn main() -> Result<(), Box<dyn Error>>{
+fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     let args = App::new("diffmig")

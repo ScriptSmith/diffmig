@@ -54,7 +54,7 @@ pub struct RegistryData<'a> {
 
 impl<'a> RegistryData<'a> {
     pub fn from(clinical_data: Box<dyn Iterator<Item=ClinicalDatumWrapper> + 'a>) -> RegistryData<'a> {
-        RegistryData { clinical_data: Box::new(clinical_data.peekable())}
+        RegistryData { clinical_data: Box::new(clinical_data.peekable()) }
     }
 }
 
@@ -80,7 +80,7 @@ impl<'a> Iterator for RegistryData<'a> {
                                 None => {}
                                 Some(cd) => {
                                     match slice.can_add(&cd) {
-                                        true => { slice.add(self.clinical_data.next().unwrap()) },
+                                        true => { slice.add(self.clinical_data.next().unwrap()) }
                                         false => return Some(slice),
                                     };
                                 }
