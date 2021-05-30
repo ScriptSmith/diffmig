@@ -60,7 +60,7 @@ impl<'a> Diff<'a> for CDE<'a> {
                 eq_diff!(s1 != s2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
             }
             (CDEValue::Number(n1), CDEValue::Number(n2)) => {
-                eq_diff!(n1 != n2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+                eq_diff!((n1 - n2).abs() > 0.01, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
             }
             (CDEValue::Range(r1), CDEValue::Range(r2)) => {
                 eq_diff!(r1 != r2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
