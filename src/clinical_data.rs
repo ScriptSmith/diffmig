@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::mem::discriminant;
 use crate::diff::{Diff, eq_diff, variant_diff};
 use std::collections::{HashMap, HashSet, BTreeSet};
+use itertools::Itertools;
 
 #[derive(Debug)]
 pub struct CDEFileValue<'a> {
@@ -495,7 +496,8 @@ impl PatientSlice {
         self.clinical_data.iter().for_each(|(k, v1)| {
             match comp.clinical_data.get(k) {
                 None => {
-                    eprintln!("RHS Missing proto-context: {:#?}", k);
+                    eprintln!("New missing proto-context: [{:#?}]", k.iter().join(", "));
+                    eprintln!("[{}]", self.clinical_data.values().map(|cdw| cdw.cd().id).sorted().join(","));
                     diffs += 1;
                 }
                 Some(v2) => match v1.cd().diff(&v2.cd()) {
@@ -509,10 +511,11 @@ impl PatientSlice {
             }
         });
 
-        comp.clinical_data.iter().for_each(|(k, _)| {
+        comp.clinical_data.iter().for_each(|(k, v)| {
             match self.clinical_data.get(k) {
                 None => {
-                    eprintln!("LHS Missing proto-context: {:#?}", k);
+                    eprintln!("Old missing proto-context: [{:#?}]", k.iter().join(", "));
+                    eprintln!("[{}]", comp.clinical_data.values().map(|cdw| cdw.cd().id).sorted().join(","));
                     diffs += 1;
                 }
                 Some(_) => {}
