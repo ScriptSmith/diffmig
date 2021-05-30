@@ -71,10 +71,11 @@ impl<'a> Iterator for RegistryData<'a> {
                 }
                 let cd = cd.unwrap();
                 let mut slice = PatientSlice::from(cd.patient);
+                slice.add(cdw);
 
                 loop {
                     match self.clinical_data.peek() {
-                        None => return None,
+                        None => return Some(slice),
                         Some(cdw) => {
                             match cdw.clinical_datum().unwrap() {
                                 None => {}
