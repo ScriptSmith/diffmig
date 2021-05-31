@@ -412,11 +412,15 @@ impl<'a> ClinicalDatum<'a> {
             Value::Object(o) => {
                 let file_name = o.get("file_name");
                 let django_file_id = o.get("django_file_id");
+                let gridfs_file_id = o.get("gridfs_file_id");
 
-                match (file_name, django_file_id) {
-                    (Some(Value::String(file_name)), Some(Value::Number(django_file_id))) => {
+                match (file_name, django_file_id, gridfs_file_id) {
+                    (Some(Value::String(file_name)), Some(Value::Number(django_file_id)), _) => {
                         let django_file_id = django_file_id.as_u64().unwrap() as u32;
                         Some(CDEValue::File(CDEFileValue { file_name, django_file_id }))
+                    },
+                    (Some(Value::String(file_name)), _, Some(Value::String(_))) => {
+                        Some(CDEValue::File(CDEFileValue {file_name, django_file_id: 0} ))
                     }
                     _ => None,
                 }
