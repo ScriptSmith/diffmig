@@ -109,8 +109,6 @@ fn diff_clinical_data(old_path: String, new_path: String, registry_code: String)
 
 
 fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
-
     let args = App::new("diffmig")
         .version("0.1.0")
         .about("Find differences between two registry migrations of the same data")
@@ -126,11 +124,24 @@ fn main() -> Result<(), Box<dyn Error>> {
             .help("The registry code")
             .required(true)
         )
+        .arg(Arg::with_name("debug")
+            .help("Print debug output")
+            .long("debug")
+            .takes_value(false)
+            .required(false)
+        )
         .get_matches();
 
     let registry_code = args.value_of("registry_code").unwrap();
     let old_zip = args.value_of("old_zip").unwrap();
     let new_zip = args.value_of("new_zip").unwrap();
+
+    env_logger::builder()
+        .filter_level(match args.is_present("debug") {
+            true => log::LevelFilter::Debug,
+            false => log::LevelFilter::Error
+        })
+        .init();
 
     let total = diff_clinical_data(old_zip.into(), new_zip.into(), registry_code.into())?;
     println!("Found {} differences", total);
