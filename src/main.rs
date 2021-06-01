@@ -18,7 +18,7 @@ use crate::clinical_data::{PatientSlice};
 use crate::diff::Diff;
 use crate::streaming::{read_array_file_to_values, map_values_to_clinical_data, RegistryData};
 
-fn get_zip_archive<'a>(zip_path: &'a str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
+fn get_zip_archive(zip_path: &str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
     Ok(ZipArchive::new(BufReader::new(file))?)
 }
