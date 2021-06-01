@@ -1,7 +1,7 @@
 mod clinical_data;
 mod diff;
 mod prompt;
-mod streaming;
+mod migrated_registry;
 
 use clap::{App, Arg};
 use indicatif::{ProgressBar, ProgressStyle, ProgressFinish};
@@ -16,7 +16,6 @@ use zip::read::ZipFile;
 
 use crate::clinical_data::{PatientSlice};
 use crate::diff::Diff;
-use crate::streaming::{read_array_file_to_values, map_values_to_clinical_data, RegistryData};
 
 fn get_zip_archive(zip_path: &str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
@@ -74,14 +73,8 @@ fn diff_clinical_data(old_path: String, new_path: String, registry_code: String)
         .on_finish(ProgressFinish::AtCurrentPos)
     );
 
-    let old_iter = read_array_file_to_values(old_reader);
-    let new_iter = read_array_file_to_values(new_reader);
-
-    let old_iter = map_values_to_clinical_data(old_iter);
-    let new_iter = map_values_to_clinical_data(new_iter);
-
-    let old_iter = RegistryData::from(Box::new(old_iter));
-    let new_iter = RegistryData::from(Box::new(new_iter));
+    let old_iter = migrated_registry::MigratedRegistry::from(old_reader);
+    let new_iter = migrated_registry::MigratedRegistry::from(new_reader);
 
     Ok(zip_diff(old_iter, new_iter))
 }
