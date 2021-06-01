@@ -19,12 +19,20 @@ use crate::diff::Diff;
 
 fn get_zip_archive(zip_path: &str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
+
     Ok(ZipArchive::new(BufReader::new(file))?)
 }
 
-fn get_zip_reader<'a>(archive: &'a mut ZipArchive<impl Read + Seek>, registry_code: &'a str) -> Result<ZipFile<'a>, Box<dyn Error>> {
-    let clinical_data_path = format!("{}/registry_data/clinical_data/rdrf_clinicaldata.json", registry_code);
-    Ok(archive.by_name(clinical_data_path.as_str())?)
+fn get_zip_reader<'a>(archive: &'a mut ZipArchive<impl Read + Seek>) -> Result<(String, ZipFile<'a>), Box<dyn Error>> {
+    let clinical_data_path = archive.file_names().find(|p| {
+        let path_split = p.split("/").collect::<Vec<&str>>();
+        match &path_split[..] {
+            [_, "registry_data", "clinical_data", "rdrf_clinicaldata.json"] => true,
+            _ => false,
+        }
+    }).ok_or("rdrf_clinicaldata.json file not found in zip")?.to_string();
+
+    Ok((clinical_data_path.clone(), archive.by_name(clinical_data_path.as_str())?))
 }
 
 fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
@@ -58,12 +66,19 @@ fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<
     }).flatten().sum()
 }
 
-fn diff_clinical_data(old_path: String, new_path: String, registry_code: String) -> Result<usize, Box<dyn Error>> {
+fn diff_clinical_data(old_path: String, new_path: String) -> Result<usize, Box<dyn Error>> {
     let mut old_archive = get_zip_archive(old_path.as_str())?;
     let mut new_archive = get_zip_archive(new_path.as_str())?;
 
-    let old_reader = get_zip_reader(&mut old_archive, registry_code.as_str())?;
-    let new_reader = get_zip_reader(&mut new_archive, registry_code.as_str())?;
+    let (old_path, old_reader) = get_zip_reader(&mut old_archive)?;
+    let (new_path, new_reader) = get_zip_reader(&mut new_archive)?;
+
+    if old_path != new_path {
+        log::error!("Registry clinical data paths don't match");
+        log::debug!("Old path: {}", old_path);
+        log::debug!("New path: {}", new_path);
+        panic!()
+    }
 
     let pb = ProgressBar::new(old_reader.size());
     let old_reader = pb.wrap_read(old_reader);
@@ -92,10 +107,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             .help("The path of the new zip file")
             .required(true)
         )
-        .arg(Arg::with_name("registry_code")
-            .help("The registry code")
-            .required(true)
-        )
         .arg(Arg::with_name("debug")
             .help("Print debug output")
             .long("debug")
@@ -104,7 +115,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .get_matches();
 
-    let registry_code = args.value_of("registry_code").unwrap();
     let old_zip = args.value_of("old_zip").unwrap();
     let new_zip = args.value_of("new_zip").unwrap();
 
@@ -115,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .init();
 
-    let total = diff_clinical_data(old_zip.into(), new_zip.into(), registry_code.into())?;
+    let total = diff_clinical_data(old_zip.into(), new_zip.into())?;
     println!("Found {} differences", total);
 
     Ok(())
