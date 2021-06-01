@@ -6,34 +6,34 @@ use std::collections::{HashMap, HashSet, BTreeSet};
 use itertools::Itertools;
 
 #[derive(Debug)]
-pub struct CDEFileValue<'a> {
-    file_name: &'a str,
+pub struct CDEFileValue {
+    file_name: String,
     django_file_id: u32,
 }
 
 #[derive(Debug)]
-pub enum CDEValue<'a> {
+pub enum CDEValue {
     Null,
     Bool(bool),
     EmptyString,
-    String(&'a str),
+    String(String),
     Number(f64),
     EmptyRange,
-    Range(HashSet<&'a str>),
-    File(CDEFileValue<'a>),
+    Range(HashSet<String>),
+    File(CDEFileValue),
 }
 
 #[derive(Debug)]
-pub struct CDE<'a> {
-    code: &'a str,
-    value: CDEValue<'a>,
+pub struct CDE {
+    code: String,
+    value: CDEValue,
 }
 
 #[derive(Debug)]
 pub enum CDEDifferenceType<'a> {
-    Missing(Option<&'a CDE<'a>>, Option<&'a CDE<'a>>),
-    Variant(&'a CDEValue<'a>, &'a CDEValue<'a>),
-    Equality(&'a CDEValue<'a>, &'a CDEValue<'a>),
+    Missing(Option<&'a CDE>, Option<&'a CDE>),
+    Variant(&'a CDEValue, &'a CDEValue),
+    Equality(&'a CDEValue, &'a CDEValue),
 }
 
 #[derive(Debug)]
@@ -42,7 +42,7 @@ pub struct CDEDifference<'a> {
     diff: CDEDifferenceType<'a>,
 }
 
-impl<'a> Diff<'a> for CDE<'a> {
+impl<'a> Diff<'a> for CDE {
     type Difference = CDEDifference<'a>;
 
     fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
@@ -75,32 +75,32 @@ impl<'a> Diff<'a> for CDE<'a> {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| CDEDifference { code: self.code, diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| CDEDifference { code: self.code.as_str(), diff: d }).collect())
         }
     }
 }
 
-type CDEMap<'a> = HashMap<&'a str, CDE<'a>>;
+type CDEMap = HashMap<String, CDE>;
 
 #[derive(Debug)]
-pub enum CDESVariant<'a> {
-    Single(CDEMap<'a>),
-    Multiple(Vec<CDEMap<'a>>),
+pub enum CDESVariant {
+    Single(CDEMap),
+    Multiple(Vec<CDEMap>),
 }
 
 #[derive(Debug)]
-pub struct Section<'a> {
-    code: &'a str,
+pub struct Section {
+    code: String,
     allow_multiple: bool,
-    cdes: CDESVariant<'a>,
+    cdes: CDESVariant,
 }
 
 #[derive(Debug)]
 pub enum SectionDifferenceType<'a> {
-    Missing(Option<&'a Section<'a>>, Option<&'a Section<'a>>),
+    Missing(Option<&'a Section>, Option<&'a Section>),
     Code(&'a str, &'a str),
     AllowMultiple(bool, bool),
-    Variant(&'a CDESVariant<'a>, &'a CDESVariant<'a>),
+    Variant(&'a CDESVariant, &'a CDESVariant),
     CDEs(Vec<CDEDifference<'a>>),
 }
 
@@ -110,13 +110,13 @@ pub struct SectionDifference<'a> {
     diff: SectionDifferenceType<'a>,
 }
 
-impl<'a> Diff<'a> for Section<'a> {
+impl<'a> Diff<'a> for Section {
     type Difference = SectionDifference<'a>;
 
     fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
         let mut diffs = vec![];
 
-        eq_diff!(self.code, comp.code, diffs, SectionDifferenceType::Code);
+        eq_diff!(self.code.as_str(), comp.code.as_str(), diffs, SectionDifferenceType::Code);
         eq_diff!(self.allow_multiple, comp.allow_multiple, diffs, SectionDifferenceType::AllowMultiple);
         variant_diff!(&self.cdes, &comp.cdes, diffs, SectionDifferenceType::Variant);
 
@@ -166,20 +166,20 @@ impl<'a> Diff<'a> for Section<'a> {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| SectionDifference { code: self.code, diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| SectionDifference { code: self.code.as_str(), diff: d }).collect())
         }
     }
 }
 
 #[derive(Debug)]
-pub struct Form<'a> {
-    name: &'a str,
-    sections: HashMap<&'a str, Section<'a>>,
+pub struct Form {
+    name: String,
+    sections: HashMap<String, Section>,
 }
 
 #[derive(Debug)]
 pub enum FormDifferenceType<'a> {
-    Missing(Option<&'a Form<'a>>, Option<&'a Form<'a>>),
+    Missing(Option<&'a Form>, Option<&'a Form>),
     Name(&'a str, &'a str),
     Sections(Vec<SectionDifference<'a>>),
 }
@@ -190,13 +190,13 @@ pub struct FormDifference<'a> {
     diff: FormDifferenceType<'a>,
 }
 
-impl<'a> Diff<'a> for Form<'a> {
+impl<'a> Diff<'a> for Form {
     type Difference = FormDifference<'a>;
 
     fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
         let mut diffs = vec![];
 
-        eq_diff!(self.name, comp.name, diffs, FormDifferenceType::Name);
+        eq_diff!(self.name.as_str(), comp.name.as_str(), diffs, FormDifferenceType::Name);
 
         let mut section_diffs = vec![];
         self.sections.iter().for_each(|(k, v1)| {
@@ -225,7 +225,7 @@ impl<'a> Diff<'a> for Form<'a> {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| FormDifference { name: self.name, diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| FormDifference { name: self.name.as_str(), diff: d }).collect())
         }
     }
 }
@@ -234,11 +234,11 @@ impl<'a> Diff<'a> for Form<'a> {
 pub enum ClinicalDatumVariant { History, CDEs }
 
 #[derive(Debug)]
-pub struct ClinicalDatum<'a> {
+pub struct ClinicalDatum {
     pub id: u32,
     pub patient: u32,
     variant: ClinicalDatumVariant,
-    forms: HashMap<&'a str, Form<'a>>,
+    forms: HashMap<String, Form>,
 }
 
 #[derive(Debug)]
@@ -254,7 +254,7 @@ pub struct ClinicalDatumDifference<'a> {
     diff: ClinicalDatumDifferenceType<'a>,
 }
 
-impl<'a> Diff<'a> for ClinicalDatum<'a> {
+impl<'a> Diff<'a> for ClinicalDatum {
     type Difference = ClinicalDatumDifference<'a>;
 
     fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
@@ -291,13 +291,13 @@ impl<'a> Diff<'a> for ClinicalDatum<'a> {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { proto_context: self.forms.keys().map(|k| String::from(*k)).collect(), diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { proto_context: self.forms.keys().map(|k| k.to_string()).collect(), diff: d }).collect())
         }
     }
 }
 
-impl<'a> ClinicalDatum<'a> {
-    pub fn from(datum: &'a serde_json::Value) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
+impl<'a> ClinicalDatum {
+    pub fn from(datum: serde_json::Value) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
         let map = datum.as_object()
             .ok_or("Not an object")?;
         let fields = map.get("fields")
@@ -335,22 +335,23 @@ impl<'a> ClinicalDatum<'a> {
     }
 
     pub fn proto_context(&self) -> BTreeSet<String> {
-        self.forms.keys().map(|k| String::from(*k)).collect()
+        self.forms.keys().map(|k| k.to_string()).collect()
     }
 
-    fn get_forms(forms: &Vec<serde_json::Value>) -> Result<HashMap<&str, Form>, Box<dyn Error>> {
+    fn get_forms(forms: &Vec<serde_json::Value>) -> Result<HashMap<String, Form>, Box<dyn Error>> {
         let forms_map = forms.iter().map(|data| {
             let form = data.as_object().ok_or("Invalid form")?;
             let name = form.get("name")
                 .ok_or("Missing form name")?
-                .as_str().ok_or("Invalid form name")?;
+                .as_str().ok_or("Invalid form name")?
+                .to_string();
             let sections = Self::get_sections(form.get("sections")
                 .ok_or("Missing form sections")?
                 .as_array().ok_or("Invalid form sections")?
             )?;
 
-            Ok((name, Form { name, sections }))
-        }).collect::<Result<HashMap<&str, Form>, Box<dyn Error>>>()?;
+            Ok((name.clone(), Form { name, sections }))
+        }).collect::<Result<HashMap<String, Form>, Box<dyn Error>>>()?;
 
         match forms.len() != forms_map.len() {
             true => Err("List of forms contains duplicates".into()),
@@ -358,12 +359,13 @@ impl<'a> ClinicalDatum<'a> {
         }
     }
 
-    fn get_sections(sections: &Vec<serde_json::Value>) -> Result<HashMap<&str, Section>, Box<dyn Error>> {
+    fn get_sections(sections: &Vec<serde_json::Value>) -> Result<HashMap<String, Section>, Box<dyn Error>> {
         let sections_map = sections.iter().map(|data| {
             let section = data.as_object().ok_or("Invalid section")?;
             let code = section.get("code")
                 .ok_or("Missing section code")?
-                .as_str().ok_or("Invalid section code")?;
+                .as_str().ok_or("Invalid section code")?
+                .to_string();
             let allow_multiple = section.get("allow_multiple")
                 .ok_or("Missing section allow_multiple")?
                 .as_bool().ok_or("Invalid section allow_multiple")?;
@@ -374,11 +376,11 @@ impl<'a> ClinicalDatum<'a> {
                 false => CDESVariant::Single(Self::get_cdes(cdes)?),
                 true => CDESVariant::Multiple(cdes.iter().map(|l| {
                     Ok(Self::get_cdes(l.as_array().ok_or("Invalid section cdes list")?)?)
-                }).collect::<Result<Vec<HashMap<&str, CDE>>, Box<dyn Error>>>()?),
+                }).collect::<Result<Vec<HashMap<String, CDE>>, Box<dyn Error>>>()?),
             };
 
-            Ok((code, Section { code, allow_multiple, cdes }))
-        }).collect::<Result<HashMap<&str, Section>, Box<dyn Error>>>()?;
+            Ok((code.clone(), Section { code, allow_multiple, cdes }))
+        }).collect::<Result<HashMap<String, Section>, Box<dyn Error>>>()?;
 
         match sections.len() != sections_map.len() {
             true => Err("List of sections contains duplicates".into()),
@@ -386,18 +388,19 @@ impl<'a> ClinicalDatum<'a> {
         }
     }
 
-    fn get_cdes(cdes: &Vec<serde_json::Value>) -> Result<HashMap<&str, CDE>, Box<dyn Error>> {
+    fn get_cdes(cdes: &Vec<serde_json::Value>) -> Result<HashMap<String, CDE>, Box<dyn Error>> {
         let cde_map = cdes.iter().map(|data| {
             let cde = data.as_object().ok_or("Invalid cde")?;
             let code = cde.get("code")
                 .ok_or("Missing cde code")?
-                .as_str().ok_or("Invalid cde code")?;
+                .as_str().ok_or("Invalid cde code")?
+                .to_string();
             let value = cde.get("value")
                 .ok_or("Missing cde value")?;
             let value = Self::get_cde_value(value)?.ok_or("Invalid cde value")?;
 
-            Ok((code, CDE { code, value }))
-        }).collect::<Result<HashMap<&str, CDE>, Box<dyn Error>>>()?;
+            Ok((code.clone(), CDE { code, value }))
+        }).collect::<Result<HashMap<String, CDE>, Box<dyn Error>>>()?;
 
         if cde_map.len() != cdes.len() {
             Err("List of CDEs contains duplicates".into())
@@ -417,10 +420,10 @@ impl<'a> ClinicalDatum<'a> {
                 match (file_name, django_file_id, gridfs_file_id) {
                     (Some(Value::String(file_name)), Some(Value::Number(django_file_id)), _) => {
                         let django_file_id = django_file_id.as_u64().unwrap() as u32;
-                        Some(CDEValue::File(CDEFileValue { file_name, django_file_id }))
+                        Some(CDEValue::File(CDEFileValue { file_name: file_name.to_string(), django_file_id }))
                     },
                     (Some(Value::String(file_name)), _, Some(Value::String(_))) => {
-                        Some(CDEValue::File(CDEFileValue {file_name, django_file_id: 0} ))
+                        Some(CDEValue::File(CDEFileValue {file_name: file_name.to_string(), django_file_id: 0} ))
                     }
                     _ => None,
                 }
@@ -429,12 +432,12 @@ impl<'a> ClinicalDatum<'a> {
             Value::Number(n) => Some(CDEValue::Number(n.as_f64().unwrap())),
             Value::String(s) => match s.as_str() {
                 "" => Some(CDEValue::EmptyString),
-                s => Some(CDEValue::String(s))
+                s => Some(CDEValue::String(s.to_string()))
             },
             Value::Array(a) => {
                 let range = a.iter().map(|s| {
-                    Ok(s.as_str().ok_or("Invalid range cde value")?)
-                }).collect::<Result<HashSet<&str>, Box<dyn Error>>>()?;
+                    Ok(s.as_str().ok_or("Invalid range cde value")?.to_string())
+                }).collect::<Result<HashSet<String>, Box<dyn Error>>>()?;
 
                 match range.is_empty() {
                     true => Some(CDEValue::EmptyRange),
@@ -448,28 +451,9 @@ impl<'a> ClinicalDatum<'a> {
 }
 
 #[derive(Debug)]
-pub struct ClinicalDatumWrapper {
-    value: Value,
-}
-
-impl ClinicalDatumWrapper {
-    pub fn from(value: Value) -> ClinicalDatumWrapper {
-        ClinicalDatumWrapper { value }
-    }
-
-    pub fn clinical_datum(&self) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
-        ClinicalDatum::from(&self.value)
-    }
-
-    pub fn cd(&self) -> ClinicalDatum {
-        self.clinical_datum().unwrap().unwrap()
-    }
-}
-
-#[derive(Debug)]
 pub struct PatientSlice {
     patient: u32,
-    clinical_data: HashMap<BTreeSet<String>, ClinicalDatumWrapper>,
+    clinical_data: HashMap<BTreeSet<String>, ClinicalDatum>,
 }
 
 impl<'a> PatientSlice {
@@ -482,9 +466,9 @@ impl<'a> PatientSlice {
         !self.clinical_data.contains_key(&proto_context) && datum.patient == self.patient
     }
 
-    pub fn add(&mut self, wrapper: ClinicalDatumWrapper) {
-        let proto_context = wrapper.clinical_datum().unwrap().unwrap().proto_context();
-        self.clinical_data.insert(proto_context, wrapper);
+    pub fn add(&mut self, datum: ClinicalDatum) {
+        let proto_context = datum.proto_context();
+        self.clinical_data.insert(proto_context, datum);
     }
 }
 
@@ -501,13 +485,13 @@ impl PatientSlice {
             match comp.clinical_data.get(k) {
                 None => {
                     eprintln!("New missing proto-context: [{:#?}]", k.iter().join(", "));
-                    eprintln!("[{}]", self.clinical_data.values().map(|cdw| cdw.cd().id).sorted().join(","));
+                    eprintln!("[{}]", self.clinical_data.values().map(|cd| cd.id).sorted().join(","));
                     diffs += 1;
                 }
-                Some(v2) => match v1.cd().diff(&v2.cd()) {
+                Some(v2) => match v1.diff(&v2) {
                     None => {}
                     Some(d) => {
-                        eprintln!("({}) ({}):", v1.cd().id, v2.cd().id);
+                        eprintln!("({}) ({}):", v1.id, v2.id);
                         eprintln!("{:#?}", d);
                         diffs += 1;
                     }
@@ -519,7 +503,7 @@ impl PatientSlice {
             match self.clinical_data.get(k) {
                 None => {
                     eprintln!("Old missing proto-context: [{:#?}]", k.iter().join(", "));
-                    eprintln!("[{}]", comp.clinical_data.values().map(|cdw| cdw.cd().id).sorted().join(","));
+                    eprintln!("[{}]", comp.clinical_data.values().map(|cd| cd.id).sorted().join(","));
                     diffs += 1;
                 }
                 Some(_) => {}

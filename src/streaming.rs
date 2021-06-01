@@ -1,6 +1,6 @@
 use std::io::{BufReader, Read, BufRead};
 use serde_json::{Value, from_str};
-use crate::clinical_data::{PatientSlice, ClinicalDatumWrapper};
+use crate::clinical_data::{PatientSlice, ClinicalDatum};
 use std::iter::Peekable;
 
 /// Takes a reader of a large JSON array, and returns an iterator that
@@ -44,16 +44,16 @@ pub fn read_array_file_to_values<'a>(reader: impl Read + 'a) -> impl Iterator<It
     }).filter_map(|v| v)
 }
 
-pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value>) -> impl Iterator<Item=ClinicalDatumWrapper> {
-    values.map(|value| ClinicalDatumWrapper::from(value))
+pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value>) -> impl Iterator<Item=ClinicalDatum> {
+    values.filter_map(|value| ClinicalDatum::from(value).expect("Failed parsing clinical datum"))
 }
 
 pub struct RegistryData<'a> {
-    clinical_data: Box<Peekable<Box<dyn Iterator<Item=ClinicalDatumWrapper> + 'a>>>,
+    clinical_data: Box<Peekable<Box<dyn Iterator<Item=ClinicalDatum> + 'a>>>,
 }
 
 impl<'a> RegistryData<'a> {
-    pub fn from(clinical_data: Box<dyn Iterator<Item=ClinicalDatumWrapper> + 'a>) -> RegistryData<'a> {
+    pub fn from(clinical_data: Box<dyn Iterator<Item=ClinicalDatum> + 'a>) -> RegistryData<'a> {
         RegistryData { clinical_data: Box::new(clinical_data.peekable()) }
     }
 }
@@ -64,28 +64,18 @@ impl<'a> Iterator for RegistryData<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.clinical_data.next() {
             None => return None,
-            Some(cdw) => {
-                let cd = cdw.clinical_datum().unwrap();
-                if cd.is_none() {
-                    return self.next();
-                }
-                let cd = cd.unwrap();
-                let mut slice = PatientSlice::from(cd.patient);
-                slice.add(cdw);
+            Some(first_cd) => {
+                let mut slice = PatientSlice::from(first_cd.patient);
+                slice.add(first_cd);
 
                 loop {
                     match self.clinical_data.peek() {
                         None => return Some(slice),
-                        Some(cdw) => {
-                            match cdw.clinical_datum().unwrap() {
-                                None => {}
-                                Some(cd) => {
-                                    match slice.can_add(&cd) {
-                                        true => { slice.add(self.clinical_data.next().unwrap()) }
-                                        false => return Some(slice),
-                                    };
-                                }
-                            }
+                        Some(cd) => {
+                            match slice.can_add(&cd) {
+                                true => { slice.add(self.clinical_data.next().unwrap()) }
+                                false => return Some(slice),
+                            };
                         }
                     }
                 }
