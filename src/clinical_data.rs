@@ -243,6 +243,7 @@ pub struct ClinicalDatum {
 
 #[derive(Debug)]
 pub enum ClinicalDatumDifferenceType<'a> {
+    Missing(Option<&'a ClinicalDatum>, Option<&'a ClinicalDatum>),
     Patient(u32, u32),
     Variant(&'a ClinicalDatumVariant, &'a ClinicalDatumVariant),
     Forms(Vec<FormDifference<'a>>),
@@ -472,50 +473,53 @@ impl<'a> PatientSlice {
     }
 }
 
-impl PatientSlice {
-    pub fn print_diffs(&self, comp: &Self) -> Option<usize> {
-        let mut diffs = 0;
+#[derive(Debug)]
+pub enum PatientSliceDifferenceType<'a> {
+    Patient(u32, u32),
+    ClinicalData(Vec<ClinicalDatumDifference<'a>>)
+}
 
-        if self.patient != comp.patient {
-            eprintln!("Patient {} doesn't match {}", self.patient, comp.patient);
-            diffs += 1;
-        }
+#[derive(Debug)]
+pub struct PatientSliceDifference<'a> {
+    ids: String,
+    diff: PatientSliceDifferenceType<'a>
+}
+
+impl<'a> Diff<'a> for PatientSlice {
+    type Difference = PatientSliceDifference<'a>;
+
+    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
+        let mut diffs = vec![];
+
+        eq_diff!(self.patient, comp.patient, diffs, PatientSliceDifferenceType::Patient);
+
+        let mut clinical_data_diffs = vec![];
 
         self.clinical_data.iter().for_each(|(k, v1)| {
             match comp.clinical_data.get(k) {
-                None => {
-                    eprintln!("New missing proto-context: [{:#?}]", k.iter().join(", "));
-                    eprintln!("[{}]", self.clinical_data.values().map(|cd| cd.id).sorted().join(","));
-                    diffs += 1;
-                }
+                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v1.proto_context(), diff: ClinicalDatumDifferenceType::Missing(Some(v1), None)}),
                 Some(v2) => match v1.diff(&v2) {
                     None => {}
-                    Some(d) => {
-                        eprintln!("({}) ({}):", v1.id, v2.id);
-                        eprintln!("{:#?}", d);
-                        diffs += 1;
-                    }
+                    Some(d) => clinical_data_diffs.extend(d)
                 }
             }
         });
 
-        comp.clinical_data.iter().for_each(|(k, _)| {
+        comp.clinical_data.iter().for_each(|(k, v)| {
             match self.clinical_data.get(k) {
-                None => {
-                    eprintln!("Old missing proto-context: [{:#?}]", k.iter().join(", "));
-                    eprintln!("[{}]", comp.clinical_data.values().map(|cd| cd.id).sorted().join(","));
-                    diffs += 1;
-                }
+                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v.proto_context(), diff: ClinicalDatumDifferenceType::Missing(None, Some(v))}),
                 Some(_) => {}
             }
         });
 
-        match diffs == 0 {
+        match clinical_data_diffs.is_empty() {
+            true => {}
+            false => diffs.push(PatientSliceDifferenceType::ClinicalData(clinical_data_diffs))
+        }
+
+        match diffs.is_empty() {
             true => None,
-            false => {
-                eprintln!();
-                Some(diffs)
-            }
+            false => Some(diffs.into_iter().map(|d| PatientSliceDifference { ids: self.clinical_data.values().map(|k| k.id).sorted().join(","), diff: d }).collect())
         }
     }
 }
