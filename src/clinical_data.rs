@@ -340,7 +340,7 @@ impl<'a> ClinicalDatum {
         self.forms.keys().map(|k| k.to_string()).collect()
     }
 
-    fn get_forms(forms: &Vec<serde_json::Value>) -> Result<HashMap<String, Form>, Box<dyn Error>> {
+    fn get_forms(forms: &[serde_json::Value]) -> Result<HashMap<String, Form>, Box<dyn Error>> {
         let forms_map = forms.iter().map(|data| {
             let form = data.as_object().ok_or("Invalid form")?;
             let name = form.get("name")
@@ -361,7 +361,7 @@ impl<'a> ClinicalDatum {
         }
     }
 
-    fn get_sections(sections: &Vec<serde_json::Value>) -> Result<HashMap<String, Section>, Box<dyn Error>> {
+    fn get_sections(sections: &[serde_json::Value]) -> Result<HashMap<String, Section>, Box<dyn Error>> {
         let sections_map = sections.iter().map(|data| {
             let section = data.as_object().ok_or("Invalid section")?;
             let code = section.get("code")
@@ -377,7 +377,7 @@ impl<'a> ClinicalDatum {
             let cdes = match allow_multiple {
                 false => CDESVariant::Single(Self::get_cdes(cdes)?),
                 true => CDESVariant::Multiple(cdes.iter().map(|l| {
-                    Ok(Self::get_cdes(l.as_array().ok_or("Invalid section cdes list")?)?)
+                    Self::get_cdes(l.as_array().ok_or("Invalid section cdes list")?)
                 }).collect::<Result<Vec<HashMap<String, CDE>>, Box<dyn Error>>>()?),
             };
 
@@ -390,7 +390,7 @@ impl<'a> ClinicalDatum {
         }
     }
 
-    fn get_cdes(cdes: &Vec<serde_json::Value>) -> Result<HashMap<String, CDE>, Box<dyn Error>> {
+    fn get_cdes(cdes: &[serde_json::Value]) -> Result<HashMap<String, CDE>, Box<dyn Error>> {
         let cde_map = cdes.iter().map(|data| {
             let cde = data.as_object().ok_or("Invalid cde")?;
             let code = cde.get("code")
