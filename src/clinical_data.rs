@@ -30,57 +30,6 @@ pub struct CDE {
     value: CDEValue,
 }
 
-#[derive(Debug)]
-pub enum CDEDifferenceType<'a> {
-    Missing(Option<&'a CDE>, Option<&'a CDE>),
-    Variant(&'a CDEValue, &'a CDEValue),
-    Equality(&'a CDEValue, &'a CDEValue),
-}
-
-#[derive(Debug)]
-pub struct CDEDifference<'a> {
-    code: &'a str,
-    diff: CDEDifferenceType<'a>,
-}
-
-impl<'a> Diff<'a> for CDE {
-    type Difference = CDEDifference<'a>;
-
-    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
-        let mut diffs = vec![];
-
-        variant_diff!(&self.value, &comp.value, diffs, CDEDifferenceType::Variant);
-
-        match (&self.value, &comp.value) {
-            (CDEValue::Null, CDEValue::Null) => {}
-            (CDEValue::EmptyString, CDEValue::EmptyString) => {}
-            (CDEValue::EmptyRange, CDEValue::EmptyRange) => {}
-            (CDEValue::Bool(b1), CDEValue::Bool(b2)) => {
-                eq_diff!(b1 != b2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
-            }
-            (CDEValue::String(s1), CDEValue::String(s2)) => {
-                eq_diff!(s1 != s2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
-            }
-            (CDEValue::Number(n1), CDEValue::Number(n2)) => {
-                eq_diff!((n1 - n2).abs() > 0.01, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
-            }
-            (CDEValue::Range(r1), CDEValue::Range(r2)) => {
-                eq_diff!(r1 != r2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
-            }
-            (CDEValue::File(f1), CDEValue::File(f2)) => {
-                eq_diff!(f1.file_name != f2.file_name || f1.django_file_id != f2.django_file_id,
-                    &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
-            }
-            (_, _) => {}
-        }
-
-        match diffs.is_empty() {
-            true => None,
-            false => Some(diffs.into_iter().map(|d| CDEDifference { code: self.code.as_str(), diff: d }).collect())
-        }
-    }
-}
-
 type CDEMap = HashMap<String, CDE>;
 
 #[derive(Debug)]
@@ -97,138 +46,9 @@ pub struct Section {
 }
 
 #[derive(Debug)]
-pub enum SectionDifferenceType<'a> {
-    Missing(Option<&'a Section>, Option<&'a Section>),
-    Code(&'a str, &'a str),
-    AllowMultiple(bool, bool),
-    Variant(&'a CDESVariant, &'a CDESVariant),
-    CDEs(Vec<CDEDifference<'a>>),
-}
-
-#[derive(Debug)]
-pub struct SectionDifference<'a> {
-    code: &'a str,
-    diff: SectionDifferenceType<'a>,
-}
-
-impl<'a> Diff<'a> for Section {
-    type Difference = SectionDifference<'a>;
-
-    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
-        let mut diffs = vec![];
-
-        eq_diff!(self.code.as_str(), comp.code.as_str(), diffs, SectionDifferenceType::Code);
-        eq_diff!(self.allow_multiple, comp.allow_multiple, diffs, SectionDifferenceType::AllowMultiple);
-        variant_diff!(&self.cdes, &comp.cdes, diffs, SectionDifferenceType::Variant);
-
-        fn diff_cdes<'a>(c1: &'a CDEMap, c2: &'a CDEMap) -> Option<Vec<CDEDifference<'a>>> {
-            let mut diffs = vec![];
-
-            c1.iter().for_each(|(k, v1)| {
-                match c2.get(k) {
-                    None => diffs.push(CDEDifference { code: k, diff: CDEDifferenceType::Missing(Some(v1), None) }),
-                    Some(v2) => match v1.diff(v2) {
-                        None => {}
-                        Some(cde_diffs) => diffs.extend(cde_diffs)
-                    }
-                }
-            });
-
-            c2.iter().for_each(|(k, v)| {
-                match c1.get(k) {
-                    None => diffs.push(CDEDifference { code: k, diff: CDEDifferenceType::Missing(None, Some(v)) }),
-                    Some(_) => {}
-                }
-            });
-
-            match diffs.is_empty() {
-                true => None,
-                false => Some(diffs)
-            }
-        }
-
-        match (&self.cdes, &comp.cdes) {
-            (CDESVariant::Single(c1), CDESVariant::Single(c2)) => {
-                match diff_cdes(c1, c2) {
-                    None => {}
-                    Some(d) => diffs.push(SectionDifferenceType::CDEs(d))
-                }
-            }
-            (CDESVariant::Multiple(v1), CDESVariant::Multiple(v2)) => {
-                v1.iter().zip(v2.iter()).for_each(|(c1, c2)| {
-                    match diff_cdes(c1, c2) {
-                        None => {}
-                        Some(d) => diffs.push(SectionDifferenceType::CDEs(d))
-                    }
-                })
-            }
-            (_, _) => {}
-        }
-
-        match diffs.is_empty() {
-            true => None,
-            false => Some(diffs.into_iter().map(|d| SectionDifference { code: self.code.as_str(), diff: d }).collect())
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Form {
     name: String,
     sections: HashMap<String, Section>,
-}
-
-#[derive(Debug)]
-pub enum FormDifferenceType<'a> {
-    Missing(Option<&'a Form>, Option<&'a Form>),
-    Name(&'a str, &'a str),
-    Sections(Vec<SectionDifference<'a>>),
-}
-
-#[derive(Debug)]
-pub struct FormDifference<'a> {
-    name: &'a str,
-    diff: FormDifferenceType<'a>,
-}
-
-impl<'a> Diff<'a> for Form {
-    type Difference = FormDifference<'a>;
-
-    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
-        let mut diffs = vec![];
-
-        eq_diff!(self.name.as_str(), comp.name.as_str(), diffs, FormDifferenceType::Name);
-
-        let mut section_diffs = vec![];
-        self.sections.iter().for_each(|(k, v1)| {
-            match comp.sections.get(k) {
-                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(Some(v1), None) }),
-                Some(v2) => {
-                    match v1.diff(v2) {
-                        None => {}
-                        Some(d) => section_diffs.extend(d)
-                    }
-                }
-            }
-        });
-
-        comp.sections.iter().for_each(|(k, v)| {
-            match self.sections.get(k) {
-                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(None, Some(v)) }),
-                Some(_) => {}
-            }
-        });
-
-        match section_diffs.is_empty() {
-            true => {}
-            false => diffs.push(FormDifferenceType::Sections(section_diffs))
-        }
-
-        match diffs.is_empty() {
-            true => None,
-            false => Some(diffs.into_iter().map(|d| FormDifference { name: self.name.as_str(), diff: d }).collect())
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -242,61 +62,7 @@ pub struct ClinicalDatum {
     forms: HashMap<String, Form>,
 }
 
-#[derive(Debug)]
-pub enum ClinicalDatumDifferenceType<'a> {
-    Missing(Option<&'a ClinicalDatum>, Option<&'a ClinicalDatum>),
-    Patient(u32, u32),
-    Variant(&'a ClinicalDatumVariant, &'a ClinicalDatumVariant),
-    Forms(Vec<FormDifference<'a>>),
-}
-
-#[derive(Debug)]
-pub struct ClinicalDatumDifference<'a> {
-    proto_context: BTreeSet<String>,
-    diff: ClinicalDatumDifferenceType<'a>,
-}
-
-impl<'a> Diff<'a> for ClinicalDatum {
-    type Difference = ClinicalDatumDifference<'a>;
-
-    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
-        let mut diffs = vec![];
-
-        eq_diff!(self.patient, comp.patient, diffs, ClinicalDatumDifferenceType::Patient);
-        variant_diff!(&self.variant, &comp.variant, diffs, ClinicalDatumDifferenceType::Variant);
-
-        let mut form_diffs = vec![];
-
-        self.forms.iter().for_each(|(k, v1)| {
-            match comp.forms.get(k) {
-                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(Some(v1), None) }),
-                Some(v2) => {
-                    match v1.diff(v2) {
-                        None => {}
-                        Some(d) => form_diffs.extend(d)
-                    }
-                }
-            }
-        });
-
-        comp.forms.iter().for_each(|(k, v)| {
-            match self.forms.get(k) {
-                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(None, Some(v)) }),
-                Some(_) => {}
-            }
-        });
-
-        match form_diffs.is_empty() {
-            true => {}
-            false => diffs.push(ClinicalDatumDifferenceType::Forms(form_diffs))
-        }
-
-        match diffs.is_empty() {
-            true => None,
-            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { proto_context: self.forms.keys().map(|k| k.to_string()).collect(), diff: d }).collect())
-        }
-    }
-}
+type ProtoContext = BTreeSet<String>;
 
 impl<'a> ClinicalDatum {
     pub fn from(datum: &'a serde_json::Value) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
@@ -336,7 +102,7 @@ impl<'a> ClinicalDatum {
         Ok(Some(ClinicalDatum { id, patient, variant, forms }))
     }
 
-    pub fn proto_context(&self) -> BTreeSet<String> {
+    pub fn proto_context(&self) -> ProtoContext {
         self.forms.keys().map(|k| k.to_string()).collect()
     }
 
@@ -455,7 +221,7 @@ impl<'a> ClinicalDatum {
 #[derive(Debug)]
 pub struct PatientSlice {
     patient: u32,
-    clinical_data: HashMap<BTreeSet<String>, ClinicalDatum>,
+    clinical_data: HashMap<ProtoContext, ClinicalDatum>,
 }
 
 impl<'a> PatientSlice {
@@ -471,6 +237,242 @@ impl<'a> PatientSlice {
     pub fn add(&mut self, datum: ClinicalDatum) {
         let proto_context = datum.proto_context();
         self.clinical_data.insert(proto_context, datum);
+    }
+}
+
+#[derive(Debug)]
+pub enum CDEDifferenceType<'a> {
+    Missing(Option<&'a CDE>, Option<&'a CDE>),
+    Variant(&'a CDEValue, &'a CDEValue),
+    Equality(&'a CDEValue, &'a CDEValue),
+}
+
+#[derive(Debug)]
+pub struct CDEDifference<'a> {
+    code: &'a str,
+    diff: CDEDifferenceType<'a>,
+}
+
+impl<'a> Diff<'a> for CDE {
+    type Difference = CDEDifference<'a>;
+
+    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
+        let mut diffs = vec![];
+
+        variant_diff!(&self.value, &comp.value, diffs, CDEDifferenceType::Variant);
+
+        match (&self.value, &comp.value) {
+            (CDEValue::Null, CDEValue::Null) => {}
+            (CDEValue::EmptyString, CDEValue::EmptyString) => {}
+            (CDEValue::EmptyRange, CDEValue::EmptyRange) => {}
+            (CDEValue::Bool(b1), CDEValue::Bool(b2)) => {
+                eq_diff!(b1 != b2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+            }
+            (CDEValue::String(s1), CDEValue::String(s2)) => {
+                eq_diff!(s1 != s2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+            }
+            (CDEValue::Number(n1), CDEValue::Number(n2)) => {
+                eq_diff!((n1 - n2).abs() > 0.01, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+            }
+            (CDEValue::Range(r1), CDEValue::Range(r2)) => {
+                eq_diff!(r1 != r2, &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+            }
+            (CDEValue::File(f1), CDEValue::File(f2)) => {
+                eq_diff!(f1.file_name != f2.file_name || f1.django_file_id != f2.django_file_id,
+                    &self.value, &comp.value, diffs, CDEDifferenceType::Equality);
+            }
+            (_, _) => {}
+        }
+
+        match diffs.is_empty() {
+            true => None,
+            false => Some(diffs.into_iter().map(|d| CDEDifference { code: self.code.as_str(), diff: d }).collect())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SectionDifferenceType<'a> {
+    Missing(Option<&'a Section>, Option<&'a Section>),
+    Code(&'a str, &'a str),
+    AllowMultiple(bool, bool),
+    Variant(&'a CDESVariant, &'a CDESVariant),
+    CDEs(Vec<CDEDifference<'a>>),
+}
+
+#[derive(Debug)]
+pub struct SectionDifference<'a> {
+    code: &'a str,
+    diff: SectionDifferenceType<'a>,
+}
+
+impl<'a> Diff<'a> for Section {
+    type Difference = SectionDifference<'a>;
+
+    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
+        let mut diffs = vec![];
+
+        eq_diff!(self.code.as_str(), comp.code.as_str(), diffs, SectionDifferenceType::Code);
+        eq_diff!(self.allow_multiple, comp.allow_multiple, diffs, SectionDifferenceType::AllowMultiple);
+        variant_diff!(&self.cdes, &comp.cdes, diffs, SectionDifferenceType::Variant);
+
+        fn diff_cdes<'a>(c1: &'a CDEMap, c2: &'a CDEMap) -> Option<Vec<CDEDifference<'a>>> {
+            let mut diffs = vec![];
+
+            c1.iter().for_each(|(k, v1)| {
+                match c2.get(k) {
+                    None => diffs.push(CDEDifference { code: k, diff: CDEDifferenceType::Missing(Some(v1), None) }),
+                    Some(v2) => match v1.diff(v2) {
+                        None => {}
+                        Some(cde_diffs) => diffs.extend(cde_diffs)
+                    }
+                }
+            });
+
+            c2.iter().for_each(|(k, v)| {
+                match c1.get(k) {
+                    None => diffs.push(CDEDifference { code: k, diff: CDEDifferenceType::Missing(None, Some(v)) }),
+                    Some(_) => {}
+                }
+            });
+
+            match diffs.is_empty() {
+                true => None,
+                false => Some(diffs)
+            }
+        }
+
+        match (&self.cdes, &comp.cdes) {
+            (CDESVariant::Single(c1), CDESVariant::Single(c2)) => {
+                match diff_cdes(c1, c2) {
+                    None => {}
+                    Some(d) => diffs.push(SectionDifferenceType::CDEs(d))
+                }
+            }
+            (CDESVariant::Multiple(v1), CDESVariant::Multiple(v2)) => {
+                v1.iter().zip(v2.iter()).for_each(|(c1, c2)| {
+                    match diff_cdes(c1, c2) {
+                        None => {}
+                        Some(d) => diffs.push(SectionDifferenceType::CDEs(d))
+                    }
+                })
+            }
+            (_, _) => {}
+        }
+
+        match diffs.is_empty() {
+            true => None,
+            false => Some(diffs.into_iter().map(|d| SectionDifference { code: self.code.as_str(), diff: d }).collect())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum FormDifferenceType<'a> {
+    Missing(Option<&'a Form>, Option<&'a Form>),
+    Name(&'a str, &'a str),
+    Sections(Vec<SectionDifference<'a>>),
+}
+
+#[derive(Debug)]
+pub struct FormDifference<'a> {
+    name: &'a str,
+    diff: FormDifferenceType<'a>,
+}
+
+impl<'a> Diff<'a> for Form {
+    type Difference = FormDifference<'a>;
+
+    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
+        let mut diffs = vec![];
+
+        eq_diff!(self.name.as_str(), comp.name.as_str(), diffs, FormDifferenceType::Name);
+
+        let mut section_diffs = vec![];
+        self.sections.iter().for_each(|(k, v1)| {
+            match comp.sections.get(k) {
+                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(Some(v1), None) }),
+                Some(v2) => {
+                    match v1.diff(v2) {
+                        None => {}
+                        Some(d) => section_diffs.extend(d)
+                    }
+                }
+            }
+        });
+
+        comp.sections.iter().for_each(|(k, v)| {
+            match self.sections.get(k) {
+                None => section_diffs.push(SectionDifference { code: k, diff: SectionDifferenceType::Missing(None, Some(v)) }),
+                Some(_) => {}
+            }
+        });
+
+        match section_diffs.is_empty() {
+            true => {}
+            false => diffs.push(FormDifferenceType::Sections(section_diffs))
+        }
+
+        match diffs.is_empty() {
+            true => None,
+            false => Some(diffs.into_iter().map(|d| FormDifference { name: self.name.as_str(), diff: d }).collect())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ClinicalDatumDifferenceType<'a> {
+    Missing(Option<&'a ClinicalDatum>, Option<&'a ClinicalDatum>),
+    Patient(u32, u32),
+    Variant(&'a ClinicalDatumVariant, &'a ClinicalDatumVariant),
+    Forms(Vec<FormDifference<'a>>),
+}
+
+#[derive(Debug)]
+pub struct ClinicalDatumDifference<'a> {
+    proto_context: ProtoContext,
+    diff: ClinicalDatumDifferenceType<'a>,
+}
+
+impl<'a> Diff<'a> for ClinicalDatum {
+    type Difference = ClinicalDatumDifference<'a>;
+
+    fn diff(&'a self, comp: &'a Self) -> Option<Vec<Self::Difference>> {
+        let mut diffs = vec![];
+
+        eq_diff!(self.patient, comp.patient, diffs, ClinicalDatumDifferenceType::Patient);
+        variant_diff!(&self.variant, &comp.variant, diffs, ClinicalDatumDifferenceType::Variant);
+
+        let mut form_diffs = vec![];
+
+        self.forms.iter().for_each(|(k, v1)| {
+            match comp.forms.get(k) {
+                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(Some(v1), None) }),
+                Some(v2) => {
+                    match v1.diff(v2) {
+                        None => {}
+                        Some(d) => form_diffs.extend(d)
+                    }
+                }
+            }
+        });
+
+        comp.forms.iter().for_each(|(k, v)| {
+            match self.forms.get(k) {
+                None => form_diffs.push(FormDifference { name: k, diff: FormDifferenceType::Missing(None, Some(v)) }),
+                Some(_) => {}
+            }
+        });
+
+        match form_diffs.is_empty() {
+            true => {}
+            false => diffs.push(ClinicalDatumDifferenceType::Forms(form_diffs))
+        }
+
+        match diffs.is_empty() {
+            true => None,
+            false => Some(diffs.into_iter().map(|d| ClinicalDatumDifference { proto_context: self.forms.keys().map(|k| k.to_string()).collect(), diff: d }).collect())
+        }
     }
 }
 
