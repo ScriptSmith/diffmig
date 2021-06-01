@@ -1,7 +1,9 @@
-use std::io::{BufReader, Read, BufRead};
 use serde_json::{Value, from_str};
-use crate::clinical_data::{PatientSlice, ClinicalDatum};
+use std::io::{BufReader, Read, BufRead};
 use std::iter::Peekable;
+
+use crate::clinical_data::{PatientSlice, ClinicalDatum};
+
 
 /// Takes a reader of a large JSON array, and returns an iterator that
 /// reads each element sequentially

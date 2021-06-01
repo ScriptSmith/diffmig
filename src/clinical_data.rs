@@ -1,9 +1,10 @@
-use std::error::Error;
-use serde_json::Value;
-use std::mem::discriminant;
-use crate::diff::{Diff, eq_diff, variant_diff};
-use std::collections::{HashMap, HashSet, BTreeSet};
 use itertools::Itertools;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet, BTreeSet};
+use std::error::Error;
+use std::mem::discriminant;
+
+use crate::diff::{Diff, eq_diff, variant_diff};
 
 #[derive(Debug)]
 pub struct CDEFileValue {
@@ -422,9 +423,9 @@ impl<'a> ClinicalDatum {
                     (Some(Value::String(file_name)), Some(Value::Number(django_file_id)), _) => {
                         let django_file_id = django_file_id.as_u64().unwrap() as u32;
                         Some(CDEValue::File(CDEFileValue { file_name: file_name.to_string(), django_file_id }))
-                    },
+                    }
                     (Some(Value::String(file_name)), _, Some(Value::String(_))) => {
-                        Some(CDEValue::File(CDEFileValue {file_name: file_name.to_string(), django_file_id: 0} ))
+                        Some(CDEValue::File(CDEFileValue { file_name: file_name.to_string(), django_file_id: 0 }))
                     }
                     _ => None,
                 }
@@ -476,13 +477,13 @@ impl<'a> PatientSlice {
 #[derive(Debug)]
 pub enum PatientSliceDifferenceType<'a> {
     Patient(u32, u32),
-    ClinicalData(Vec<ClinicalDatumDifference<'a>>)
+    ClinicalData(Vec<ClinicalDatumDifference<'a>>),
 }
 
 #[derive(Debug)]
 pub struct PatientSliceDifference<'a> {
     ids: String,
-    diff: PatientSliceDifferenceType<'a>
+    diff: PatientSliceDifferenceType<'a>,
 }
 
 impl<'a> Diff<'a> for PatientSlice {
@@ -497,7 +498,7 @@ impl<'a> Diff<'a> for PatientSlice {
 
         self.clinical_data.iter().for_each(|(k, v1)| {
             match comp.clinical_data.get(k) {
-                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v1.proto_context(), diff: ClinicalDatumDifferenceType::Missing(Some(v1), None)}),
+                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v1.proto_context(), diff: ClinicalDatumDifferenceType::Missing(Some(v1), None) }),
                 Some(v2) => match v1.diff(&v2) {
                     None => {}
                     Some(d) => clinical_data_diffs.extend(d)
@@ -507,7 +508,7 @@ impl<'a> Diff<'a> for PatientSlice {
 
         comp.clinical_data.iter().for_each(|(k, v)| {
             match self.clinical_data.get(k) {
-                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v.proto_context(), diff: ClinicalDatumDifferenceType::Missing(None, Some(v))}),
+                None => clinical_data_diffs.push(ClinicalDatumDifference { proto_context: v.proto_context(), diff: ClinicalDatumDifferenceType::Missing(None, Some(v)) }),
                 Some(_) => {}
             }
         });
