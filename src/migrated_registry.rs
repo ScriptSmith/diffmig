@@ -2,16 +2,17 @@ use serde_json::{Value, from_str, to_string_pretty};
 use std::io::{BufReader, Read, BufRead};
 use std::iter::Peekable;
 
-use crate::clinical_data::{PatientSlice, ClinicalDatum};
+use crate::clinical_data::{PatientSlice, ClinicalDatum, ClinicalDatumVariant};
 
 pub struct MigratedRegistry<'a> {
     iterator: Box<Peekable<Box<dyn Iterator<Item=ClinicalDatum> + 'a>>>,
 }
 
 impl<'a> MigratedRegistry<'a> {
-    pub fn from(reader: impl Read + 'a) -> MigratedRegistry<'a> {
+    pub fn from(reader: impl Read + 'a, cdes_only: bool) -> MigratedRegistry<'a> {
         let values = Self::read_array_file_to_values(reader);
-        let clinical_data: Box<dyn Iterator<Item=ClinicalDatum>> = Box::new(Self::map_values_to_clinical_data(values));
+        let clinical_data = Self::map_values_to_clinical_data(values, cdes_only);
+
         let iterator = Box::new(clinical_data.peekable());
 
         MigratedRegistry { iterator }
@@ -58,15 +59,23 @@ impl<'a> MigratedRegistry<'a> {
         }).flatten()
     }
 
-    pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value>) -> impl Iterator<Item=ClinicalDatum> {
-        values.filter_map(|value| match ClinicalDatum::from(&value) {
+    pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value> + 'a, cdes_only: bool) -> Box<dyn Iterator<Item=ClinicalDatum> + 'a> {
+        let data = values.filter_map(|value| match ClinicalDatum::from(&value) {
             Ok(cd) => cd,
             Err(e) => {
                 log::error!("Error parsing clinical datum: {:#?}", e);
                 log::debug!("Original value: {}", to_string_pretty(&value).unwrap());
                 panic!()
             }
-        })
+        });
+
+        match cdes_only {
+            true => Box::new(data.filter_map(|cd| match cd.variant {
+                ClinicalDatumVariant::History => None,
+                ClinicalDatumVariant::CDEs => Some(cd)
+            })),
+            false => Box::new(data)
+        }
     }
 }
 

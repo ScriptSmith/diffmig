@@ -66,7 +66,7 @@ fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<
     }).flatten().sum()
 }
 
-fn diff_clinical_data(old_path: String, new_path: String) -> Result<usize, Box<dyn Error>> {
+fn diff_clinical_data(old_path: String, new_path: String, cdes_only: bool) -> Result<usize, Box<dyn Error>> {
     let mut old_archive = get_zip_archive(old_path.as_str())?;
     let mut new_archive = get_zip_archive(new_path.as_str())?;
 
@@ -88,8 +88,8 @@ fn diff_clinical_data(old_path: String, new_path: String) -> Result<usize, Box<d
         .on_finish(ProgressFinish::AtCurrentPos)
     );
 
-    let old_iter = migrated_registry::MigratedRegistry::from(old_reader);
-    let new_iter = migrated_registry::MigratedRegistry::from(new_reader);
+    let old_iter = migrated_registry::MigratedRegistry::from(old_reader, cdes_only);
+    let new_iter = migrated_registry::MigratedRegistry::from(new_reader, cdes_only);
 
     Ok(zip_diff(old_iter, new_iter))
 }
@@ -107,6 +107,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             .help("The path of the new zip file")
             .required(true)
         )
+        .arg(Arg::with_name("cdes_only")
+            .help("Only compare 'cdes' clinical datum variants")
+            .long("cdes")
+            .takes_value(false)
+            .required(false)
+        )
         .arg(Arg::with_name("debug")
             .help("Print debug output")
             .long("debug")
@@ -117,6 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let old_zip = args.value_of("old_zip").unwrap();
     let new_zip = args.value_of("new_zip").unwrap();
+    let cdes_only = args.is_present("cdes_only");
 
     env_logger::builder()
         .filter_level(match args.is_present("debug") {
@@ -125,7 +132,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .init();
 
-    let total = diff_clinical_data(old_zip.into(), new_zip.into())?;
+    let total = diff_clinical_data(old_zip.into(), new_zip.into(), cdes_only)?;
     println!("Found {} differences", total);
 
     Ok(())

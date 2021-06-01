@@ -58,7 +58,7 @@ pub enum ClinicalDatumVariant { History, CDEs }
 pub struct ClinicalDatum {
     pub id: u32,
     pub patient: u32,
-    variant: ClinicalDatumVariant,
+    pub variant: ClinicalDatumVariant,
     forms: HashMap<String, Form>,
 }
 
