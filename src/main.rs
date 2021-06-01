@@ -3,7 +3,6 @@ mod diff;
 mod streaming;
 
 use clap::{App, Arg};
-use env_logger;
 use indicatif::{ProgressBar, ProgressStyle, ProgressFinish};
 use itertools::{Itertools, EitherOrBoth};
 use std::error::Error;

@@ -299,7 +299,7 @@ impl<'a> Diff<'a> for ClinicalDatum {
 }
 
 impl<'a> ClinicalDatum {
-    pub fn from(datum: serde_json::Value) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
+    pub fn from(datum: &'a serde_json::Value) -> Result<Option<ClinicalDatum>, Box<dyn Error>> {
         let map = datum.as_object()
             .ok_or("Not an object")?;
         let fields = map.get("fields")

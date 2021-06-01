@@ -1,4 +1,4 @@
-use serde_json::{Value, from_str};
+use serde_json::{Value, from_str, to_string_pretty};
 use std::io::{BufReader, Read, BufRead};
 use std::iter::Peekable;
 
@@ -47,7 +47,14 @@ pub fn read_array_file_to_values<'a>(reader: impl Read + 'a) -> impl Iterator<It
 }
 
 pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value>) -> impl Iterator<Item=ClinicalDatum> {
-    values.filter_map(|value| ClinicalDatum::from(value).expect("Failed parsing clinical datum"))
+    values.filter_map(|value| match ClinicalDatum::from(&value) {
+        Ok(cd) => cd,
+        Err(e) => {
+            log::error!("Error parsing clinical datum: {:#?}", e);
+            log::debug!("Original value: {}", to_string_pretty(&value).unwrap());
+            panic!()
+        }
+    })
 }
 
 pub struct RegistryData<'a> {
