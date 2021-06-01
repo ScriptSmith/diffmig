@@ -50,10 +50,10 @@ fn prompt_input() -> PromptResponse {
     }
 }
 
-fn zip_diff<'a>(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
+fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
     let mut skip_input = false;
 
-    let counts = old_iter.zip_longest(new_iter).map(|pair| {
+    old_iter.zip_longest(new_iter).map(|pair| {
         match pair {
             EitherOrBoth::Both(old, new) => {
                 match old.diff(&new) {
@@ -78,9 +78,7 @@ fn zip_diff<'a>(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Itera
                 panic!("Old ran out of slices!")
             }
         }
-    }).collect::<Vec<Option<usize>>>();
-
-    counts.into_iter().filter_map(|v| v).sum()
+    }).flatten().sum()
 }
 
 fn diff_clinical_data(old_path: String, new_path: String, registry_code: String) -> Result<usize, Box<dyn Error>> {
