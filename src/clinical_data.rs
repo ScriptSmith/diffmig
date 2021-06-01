@@ -515,7 +515,7 @@ impl PatientSlice {
             }
         });
 
-        comp.clinical_data.iter().for_each(|(k, v)| {
+        comp.clinical_data.iter().for_each(|(k, _)| {
             match self.clinical_data.get(k) {
                 None => {
                     eprintln!("Old missing proto-context: [{:#?}]", k.iter().join(", "));

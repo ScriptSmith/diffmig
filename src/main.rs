@@ -70,10 +70,10 @@ fn zip_diff<'a>(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Itera
                     }
                 }
             }
-            EitherOrBoth::Left(old) => {
+            EitherOrBoth::Left(_) => {
                 panic!("New ran out of slices!")
             }
-            EitherOrBoth::Right(new) => {
+            EitherOrBoth::Right(_) => {
                 panic!("Old ran out of slices!")
             }
         }
