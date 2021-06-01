@@ -43,7 +43,7 @@ pub fn read_array_file_to_values<'a>(reader: impl Read + 'a) -> impl Iterator<It
                 Some(None)
             }
         }
-    }).filter_map(|v| v)
+    }).flatten()
 }
 
 pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value>) -> impl Iterator<Item=ClinicalDatum> {
