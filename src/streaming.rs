@@ -64,24 +64,26 @@ impl<'a> Iterator for RegistryData<'a> {
     type Item = PatientSlice;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.clinical_data.next() {
-            None => return None,
+        return match self.clinical_data.next() {
+            None => None,
             Some(first_cd) => {
                 let mut slice = PatientSlice::from(first_cd.patient);
                 slice.add(first_cd);
 
                 loop {
                     match self.clinical_data.peek() {
-                        None => return Some(slice),
+                        None => break,
                         Some(cd) => {
                             match slice.can_add(&cd) {
                                 true => { slice.add(self.clinical_data.next().unwrap()) }
-                                false => return Some(slice),
+                                false => break,
                             };
                         }
                     }
                 }
+
+                Some(slice)
             }
-        }
+        };
     }
 }
