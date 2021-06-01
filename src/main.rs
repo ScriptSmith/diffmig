@@ -1,5 +1,6 @@
 mod clinical_data;
 mod diff;
+mod prompt;
 mod streaming;
 
 use clap::{App, Arg};
@@ -7,7 +8,7 @@ use indicatif::{ProgressBar, ProgressStyle, ProgressFinish};
 use itertools::{Itertools, EitherOrBoth};
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, stdin, stdout, Write};
+use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 use std::process;
 use zip::ZipArchive;
@@ -27,28 +28,6 @@ fn get_zip_reader<'a>(archive: &'a mut ZipArchive<impl Read + Seek>, registry_co
     Ok(archive.by_name(clinical_data_path.as_str())?)
 }
 
-enum PromptResponse {
-    All,
-    Yes,
-    No,
-}
-
-fn prompt_input() -> PromptResponse {
-    let mut input = String::new();
-    loop {
-        print!("\x1b[1;34mContinue [(Y)es|(n)o|(a)ll]? \x1b[0m");
-        stdout().flush().ok();
-        stdin().read_line(&mut input).expect("Failed reading input");
-
-        match input.to_ascii_lowercase().trim() {
-            "y" | "yes" | "" => return PromptResponse::Yes,
-            "n" | "no" => return PromptResponse::No,
-            "a" | "all" => return PromptResponse::All,
-            _ => input.clear()
-        }
-    }
-}
-
 fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
     let mut skip_input = false;
 
@@ -60,10 +39,10 @@ fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<
                     Some(diffs) => {
                         diffs.iter().for_each(|d| eprintln!("{:#?}", d));
                         if !skip_input {
-                            match prompt_input() {
-                                PromptResponse::All => skip_input = true,
-                                PromptResponse::Yes => {}
-                                PromptResponse::No => process::exit(0)
+                            match prompt::input() {
+                                prompt::Response::All => skip_input = true,
+                                prompt::Response::Yes => {}
+                                prompt::Response::No => process::exit(0)
                             }
                         }
                         Some(diffs.len())
