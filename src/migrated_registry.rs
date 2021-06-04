@@ -94,7 +94,7 @@ impl<'a> Iterator for MigratedRegistry<'a> {
                         None => break,
                         Some(cd) => {
                             match slice.can_add(&cd) {
-                                true => { slice.add(self.iterator.next().unwrap()) }
+                                true => slice.add(self.iterator.next().unwrap()),
                                 false => break,
                             };
                         }

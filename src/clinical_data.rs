@@ -408,9 +408,8 @@ impl<'a> Diff<'a> for Form {
             }
         });
 
-        match section_diffs.is_empty() {
-            true => {}
-            false => diffs.push(FormDifferenceType::Sections(section_diffs))
+        if !section_diffs.is_empty() {
+            diffs.push(FormDifferenceType::Sections(section_diffs));
         }
 
         match diffs.is_empty() {
@@ -464,9 +463,8 @@ impl<'a> Diff<'a> for ClinicalDatum {
             }
         });
 
-        match form_diffs.is_empty() {
-            true => {}
-            false => diffs.push(ClinicalDatumDifferenceType::Forms(form_diffs))
+        if !form_diffs.is_empty() {
+            diffs.push(ClinicalDatumDifferenceType::Forms(form_diffs));
         }
 
         match diffs.is_empty() {
@@ -515,9 +513,8 @@ impl<'a> Diff<'a> for PatientSlice {
             }
         });
 
-        match clinical_data_diffs.is_empty() {
-            true => {}
-            false => diffs.push(PatientSliceDifferenceType::ClinicalData(clinical_data_diffs))
+        if !clinical_data_diffs.is_empty() {
+            diffs.push(PatientSliceDifferenceType::ClinicalData(clinical_data_diffs));
         }
 
         match diffs.is_empty() {
