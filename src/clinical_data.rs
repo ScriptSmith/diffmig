@@ -482,6 +482,7 @@ pub enum PatientSliceDifferenceType<'a> {
 
 #[derive(Debug)]
 pub struct PatientSliceDifference<'a> {
+    patient: u32,
     ids: String,
     diff: PatientSliceDifferenceType<'a>,
 }
@@ -519,7 +520,7 @@ impl<'a> Diff<'a> for PatientSlice {
 
         match diffs.is_empty() {
             true => None,
-            false => Some(diffs.into_iter().map(|d| PatientSliceDifference { ids: self.clinical_data.values().map(|k| k.id).sorted().join(","), diff: d }).collect())
+            false => Some(diffs.into_iter().map(|d| PatientSliceDifference { patient: self.patient, ids: self.clinical_data.values().map(|k| k.id).sorted().join(","), diff: d }).collect())
         }
     }
 }
