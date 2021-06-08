@@ -69,5 +69,5 @@ pub struct FormDefinition {
 
 pub struct SectionDefinition {
     pub code: String,
-    pub cdes: Vec<String>,
+    pub cdes: HashSet<String>,
 }
