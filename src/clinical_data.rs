@@ -5,6 +5,7 @@ use std::error::Error;
 use std::mem::discriminant;
 
 use crate::diff::{Diff, eq_diff, variant_diff};
+use crate::registry_definition::{RegistryDefinition};
 
 #[derive(Debug)]
 pub struct CDEFileValue {
@@ -100,6 +101,51 @@ impl<'a> ClinicalDatum {
         )?;
 
         Ok(Some(ClinicalDatum { id, patient, variant, forms }))
+    }
+
+    pub fn validate(&self, definition: &RegistryDefinition) -> Result<(), String> {
+        self.forms.iter().map(|(form_name, form)| match definition.forms.get(form_name) {
+            None => Err(format!("Clinical datum contains extra form: {}", form_name)),
+            Some(form_definition) => {
+                form.sections.iter().map(|(section_code, section)| match form_definition.sections.get(section_code) {
+                    None => Err(format!("Clinical datum's form {} contains extra section: {}", form_name, section_code)),
+                    Some(_) => match definition.sections.get(section_code) {
+                        None => Err(format!("Section definition {} doesn't exist", section_code)),
+                        Some(section_definition) => {
+                            let validate_cde_map = |cdes: &CDEMap| -> Result<(), String> {
+                                cdes.iter().map(|(cde_code, _)| match section_definition.cdes.contains(cde_code) {
+                                    true => Ok(()),
+                                    false => Err(format!("Clinical datum's form {} section {} contains extra cde: {}", form_name, section_code, cde_code))
+                                }).collect::<Result<(), String>>()?;
+
+                                section_definition.cdes.iter().map(|cde_code| match cdes.get(cde_code) {
+                                    None => Err(format!("Clinical datum's form {} section {} is missing cde: {}", form_name, section_code, cde_code)),
+                                    Some(_) => Ok(())
+                                }).collect::<Result<(), String>>()?;
+
+                                Ok(())
+                            };
+
+                            match &section.cdes {
+                                CDESVariant::Single(cde_map) => validate_cde_map(cde_map)?,
+                                CDESVariant::Multiple(cde_maps) => cde_maps.iter().map(|cde_map| validate_cde_map(cde_map)).collect::<Result<(), String>>()?,
+                            }
+
+                            Ok(())
+                        }
+                    }
+                }).collect::<Result<(), String>>()?;
+
+                form_definition.sections.iter().map(|section_code| match form.sections.get(section_code) {
+                    None => Err(format!("Clinical datum's form {} is missing section: {}", form_name, section_code)),
+                    Some(_) => Ok(())
+                }).collect::<Result<(), String>>()?;
+
+                Ok(())
+            }
+        }).collect::<Result<(), String>>()?;
+
+        Ok(())
     }
 
     pub fn proto_context(&self) -> ProtoContext {

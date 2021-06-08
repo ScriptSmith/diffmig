@@ -1,7 +1,8 @@
 mod clinical_data;
 mod diff;
 mod prompt;
-mod migrated_registry;
+mod registry_data;
+mod registry_definition;
 
 use clap::{App, Arg};
 use indicatif::{ProgressBar, ProgressStyle, ProgressFinish};
@@ -16,6 +17,8 @@ use zip::read::ZipFile;
 
 use crate::clinical_data::{PatientSlice};
 use crate::diff::Diff;
+use crate::registry_definition::RegistryDefinition;
+use serde_json::{Value, from_reader};
 
 fn get_zip_archive(zip_path: &str) -> Result<ZipArchive<impl Read + Seek>, Box<dyn Error>> {
     let file = File::open(Path::new(zip_path))?;
@@ -23,16 +26,28 @@ fn get_zip_archive(zip_path: &str) -> Result<ZipArchive<impl Read + Seek>, Box<d
     Ok(ZipArchive::new(BufReader::new(file))?)
 }
 
-fn get_zip_reader<'a>(archive: &'a mut ZipArchive<impl Read + Seek>) -> Result<(String, ZipFile<'a>), Box<dyn Error>> {
-    let clinical_data_path = archive.file_names().find(|p| {
+fn get_zip_clinical_data<'a>(archive: &'a mut ZipArchive<impl Read + Seek>) -> Result<(String, ZipFile<'a>), Box<dyn Error>> {
+    let registry_code = archive.file_names().filter_map(|p| {
         let path_split = p.split("/").collect::<Vec<&str>>();
         match &path_split[..] {
-            [_, "registry_data", "clinical_data", "rdrf_clinicaldata.json"] => true,
-            _ => false,
+            [code, "registry_data", "clinical_data", "rdrf_clinicaldata.json"] => Some(code.to_string()),
+            _ => None,
         }
-    }).ok_or("rdrf_clinicaldata.json file not found in zip")?.to_string();
+    }).collect::<String>();
 
-    Ok((clinical_data_path.clone(), archive.by_name(clinical_data_path.as_str())?))
+    Ok((registry_code.clone(), archive.by_name(format!("{}/registry_data/clinical_data/rdrf_clinicaldata.json", registry_code).as_str())?))
+}
+
+fn get_zip_form_definition(registry_code: &str, zip_path: &str) -> Result<Vec<Value>, Box<dyn Error>> {
+    let mut archive = get_zip_archive(zip_path)?;
+    let zip_file = archive.by_name(format!("{}/registry_definition/rdrf_registryform.json", registry_code).as_str())?;
+    Ok(from_reader::<_, Vec<Value>>(zip_file)?)
+}
+
+fn get_zip_section_definition(registry_code: &str, zip_path: &str) -> Result<Vec<Value>, Box<dyn Error>> {
+    let mut archive = get_zip_archive(zip_path)?;
+    let zip_file = archive.by_name(format!("{}/registry_definition/rdrf_section.json", registry_code).as_str())?;
+    Ok(from_reader::<_, Vec<Value>>(zip_file)?)
 }
 
 fn zip_diff(old_iter: impl Iterator<Item=PatientSlice>, new_iter: impl Iterator<Item=PatientSlice>) -> usize {
@@ -70,15 +85,24 @@ fn diff_clinical_data(old_path: String, new_path: String, cdes_only: bool) -> Re
     let mut old_archive = get_zip_archive(old_path.as_str())?;
     let mut new_archive = get_zip_archive(new_path.as_str())?;
 
-    let (old_path, old_reader) = get_zip_reader(&mut old_archive)?;
-    let (new_path, new_reader) = get_zip_reader(&mut new_archive)?;
+    let (old_code, old_reader) = get_zip_clinical_data(&mut old_archive)?;
+    let (new_code, new_reader) = get_zip_clinical_data(&mut new_archive)?;
 
-    if old_path != new_path {
+    if old_code != new_code {
         log::error!("Registry clinical data paths don't match");
-        log::debug!("Old path: {}", old_path);
-        log::debug!("New path: {}", new_path);
+        log::debug!("Old path: {}", old_code);
+        log::debug!("New path: {}", new_code);
         panic!()
     }
+
+    let old_form_definition = get_zip_form_definition(old_code.as_str(), old_path.as_str())?;
+    let new_form_definition = get_zip_form_definition(new_code.as_str(), new_path.as_str())?;
+
+    let old_section_definition = get_zip_section_definition(old_code.as_str(), old_path.as_str())?;
+    let new_section_definition = get_zip_section_definition(new_code.as_str(), new_path.as_str())?;
+
+    let old_definition = RegistryDefinition::new(&old_form_definition, &old_section_definition)?;
+    let new_definition = RegistryDefinition::new(&new_form_definition, &new_section_definition)?;
 
     let pb = ProgressBar::new(old_reader.size());
     let old_reader = pb.wrap_read(old_reader);
@@ -88,8 +112,8 @@ fn diff_clinical_data(old_path: String, new_path: String, cdes_only: bool) -> Re
         .on_finish(ProgressFinish::AtCurrentPos)
     );
 
-    let old_iter = migrated_registry::MigratedRegistry::from(old_reader, cdes_only);
-    let new_iter = migrated_registry::MigratedRegistry::from(new_reader, cdes_only);
+    let old_iter = registry_data::RegistryData::from(old_reader, &old_definition, cdes_only);
+    let new_iter = registry_data::RegistryData::from(new_reader, &new_definition, cdes_only);
 
     Ok(zip_diff(old_iter, new_iter))
 }

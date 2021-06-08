@@ -3,19 +3,20 @@ use std::io::{BufReader, Read, BufRead};
 use std::iter::Peekable;
 
 use crate::clinical_data::{PatientSlice, ClinicalDatum, ClinicalDatumVariant};
+use crate::registry_definition::RegistryDefinition;
 
-pub struct MigratedRegistry<'a> {
+pub struct RegistryData<'a> {
     iterator: Box<Peekable<Box<dyn Iterator<Item=ClinicalDatum> + 'a>>>,
 }
 
-impl<'a> MigratedRegistry<'a> {
-    pub fn from(reader: impl Read + 'a, cdes_only: bool) -> MigratedRegistry<'a> {
+impl<'a> RegistryData<'a> {
+    pub fn from(reader: impl Read + 'a, definition: &'a RegistryDefinition, cdes_only: bool) -> RegistryData<'a> {
         let values = Self::read_array_file_to_values(reader);
-        let clinical_data = Self::map_values_to_clinical_data(values, cdes_only);
+        let clinical_data = Self::map_values_to_clinical_data(values, definition, cdes_only);
 
         let iterator = Box::new(clinical_data.peekable());
 
-        MigratedRegistry { iterator }
+        RegistryData { iterator }
     }
 
     /// Takes a reader of a large JSON array, and returns an iterator that
@@ -59,9 +60,16 @@ impl<'a> MigratedRegistry<'a> {
         }).flatten()
     }
 
-    pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value> + 'a, cdes_only: bool) -> Box<dyn Iterator<Item=ClinicalDatum> + 'a> {
-        let data = values.filter_map(|value| match ClinicalDatum::from(&value) {
-            Ok(cd) => cd,
+    pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value> + 'a, definition: &'a RegistryDefinition, cdes_only: bool) -> Box<dyn Iterator<Item=ClinicalDatum> + 'a> {
+        let data = values.filter_map(move |value| match ClinicalDatum::from(&value) {
+            Ok(Some(cd)) => {
+                match cd.validate(definition) {
+                    Ok(_) => {}
+                    Err(e) => println!("Clinical datum doesn't match definition: {}", e)
+                }
+                Some(cd)
+            }
+            Ok(None) => None,
             Err(e) => {
                 log::error!("Error parsing clinical datum: {:#?}", e);
                 log::debug!("Original value: {}", to_string_pretty(&value).unwrap());
@@ -79,7 +87,7 @@ impl<'a> MigratedRegistry<'a> {
     }
 }
 
-impl<'a> Iterator for MigratedRegistry<'a> {
+impl<'a> Iterator for RegistryData<'a> {
     type Item = PatientSlice;
 
     fn next(&mut self) -> Option<Self::Item> {
