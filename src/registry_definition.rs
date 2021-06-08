@@ -31,7 +31,7 @@ impl RegistryDefinition {
                 .as_str()
                 .ok_or("Invalid form sections")?
                 .split(",")
-                .map(|s| s.to_string())
+                .map(|s| s.trim().to_string())
                 .collect();
 
             Ok((name.clone(), FormDefinition { name, sections }))
@@ -54,7 +54,7 @@ impl RegistryDefinition {
                 .as_str()
                 .ok_or("Invalid section cdes")?
                 .split(",")
-                .map(|s| s.to_string())
+                .map(|s| s.trim().to_string())
                 .collect();
 
             Ok((code.clone(), SectionDefinition { code, cdes }))
