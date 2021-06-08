@@ -103,49 +103,44 @@ impl<'a> ClinicalDatum {
         Ok(Some(ClinicalDatum { id, patient, variant, forms }))
     }
 
-    pub fn validate(&self, definition: &RegistryDefinition) -> Result<(), String> {
-        self.forms.iter().map(|(form_name, form)| match definition.forms.get(form_name) {
-            None => Err(format!("Clinical datum contains extra form: {}", form_name)),
+    pub fn validate(&self, definition: &RegistryDefinition) -> Vec<String> {
+        let mut errors = vec![];
+        self.forms.iter().for_each(|(form_name, form)| match definition.forms.get(form_name) {
+            None => errors.push(format!("Clinical datum contains extra form: {}", form_name)),
             Some(form_definition) => {
-                form.sections.iter().map(|(section_code, section)| match form_definition.sections.get(section_code) {
-                    None => Err(format!("Clinical datum's form {} contains extra section: {}", form_name, section_code)),
+                form.sections.iter().for_each(|(section_code, section)| match form_definition.sections.get(section_code) {
+                    None => errors.push(format!("Clinical datum's form {} contains extra section: {}", form_name, section_code)),
                     Some(_) => match definition.sections.get(section_code) {
-                        None => Err(format!("Section definition {} doesn't exist", section_code)),
+                        None => errors.push(format!("Section definition {} doesn't exist", section_code)),
                         Some(section_definition) => {
-                            let validate_cde_map = |cdes: &CDEMap| -> Result<(), String> {
-                                cdes.iter().map(|(cde_code, _)| match section_definition.cdes.contains(cde_code) {
-                                    true => Ok(()),
-                                    false => Err(format!("Clinical datum's form {} section {} contains extra cde: {}", form_name, section_code, cde_code))
-                                }).collect::<Result<(), String>>()?;
+                            let mut validate_cde_map = |cdes: &CDEMap| {
+                                cdes.iter().for_each(|(cde_code, _)| match section_definition.cdes.contains(cde_code) {
+                                    true => {},
+                                    false => errors.push(format!("Clinical datum's form {} section {} contains extra cde: {}", form_name, section_code, cde_code))
+                                });
 
-                                section_definition.cdes.iter().map(|cde_code| match cdes.get(cde_code) {
-                                    None => Err(format!("Clinical datum's form {} section {} is missing cde: {}", form_name, section_code, cde_code)),
-                                    Some(_) => Ok(())
-                                }).collect::<Result<(), String>>()?;
-
-                                Ok(())
+                                section_definition.cdes.iter().for_each(|cde_code| match cdes.get(cde_code) {
+                                    None => errors.push(format!("Clinical datum's form {} section {} is missing cde: {}", form_name, section_code, cde_code)),
+                                    Some(_) => {}
+                                });
                             };
 
                             match &section.cdes {
-                                CDESVariant::Single(cde_map) => validate_cde_map(cde_map)?,
-                                CDESVariant::Multiple(cde_maps) => cde_maps.iter().map(|cde_map| validate_cde_map(cde_map)).collect::<Result<(), String>>()?,
+                                CDESVariant::Single(cde_map) => validate_cde_map(cde_map),
+                                CDESVariant::Multiple(cde_maps) => cde_maps.iter().for_each(|cde_map| validate_cde_map(cde_map)),
                             }
-
-                            Ok(())
                         }
                     }
-                }).collect::<Result<(), String>>()?;
+                });
 
-                form_definition.sections.iter().map(|section_code| match form.sections.get(section_code) {
-                    None => Err(format!("Clinical datum's form {} is missing section: {}", form_name, section_code)),
-                    Some(_) => Ok(())
-                }).collect::<Result<(), String>>()?;
-
-                Ok(())
+                form_definition.sections.iter().for_each(|section_code| match form.sections.get(section_code) {
+                    None => errors.push(format!("Clinical datum's form {} is missing section: {}", form_name, section_code)),
+                    Some(_) => {}
+                });
             }
-        }).collect::<Result<(), String>>()?;
+        });
 
-        Ok(())
+        errors
     }
 
     pub fn proto_context(&self) -> ProtoContext {

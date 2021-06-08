@@ -63,9 +63,7 @@ impl<'a> RegistryData<'a> {
     pub fn map_values_to_clinical_data(values: impl Iterator<Item=Value> + 'a, definition: &'a RegistryDefinition, cdes_only: bool) -> Box<dyn Iterator<Item=ClinicalDatum> + 'a> {
         let data = values.filter_map(move |value| match ClinicalDatum::from(&value) {
             Ok(Some(cd)) => {
-                if let Err(e) = cd.validate(definition) {
-                    println!("Clinical datum doesn't match definition: {}", e);
-                }
+                cd.validate(definition).iter().for_each(|e| println!("Clinical datum doesn't match definition: {}", e));
                 Some(cd)
             }
             Ok(None) => None,
